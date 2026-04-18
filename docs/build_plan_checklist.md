@@ -75,14 +75,14 @@ Phase gate:
 
 Reference: `docs/canonical_dtos.md`
 
-- [ ] Create canonical TypeScript DTO files under `/types`.
-- [ ] Define at minimum: `Entity`, `Edge`, `RelationshipParticipant`, `RelationshipInterval`, `Event`, `Name`, `Media`, `GraphResponse`.
-- [ ] Match field names and nullability exactly.
-- [ ] Reuse these types in API handlers, projection logic, and frontend graph state.
-- [ ] Remove or avoid duplicate shape definitions elsewhere.
+- [x] Create canonical TypeScript DTO files under `/types`.
+- [x] Define at minimum: `Entity`, `Edge`, `RelationshipParticipant`, `RelationshipInterval`, `Event`, `Name`, `Media`, `GraphResponse`.
+- [x] Match field names and nullability exactly.
+- [x] Reuse these types in API handlers, projection logic, and frontend graph state.
+- [x] Remove or avoid duplicate shape definitions elsewhere.
 
 Phase gate:
-- [ ] Single canonical type source exists and is imported everywhere DTOs are needed.
+- [x] Single canonical type source exists and is imported everywhere DTOs are needed.
 
 ---
 
