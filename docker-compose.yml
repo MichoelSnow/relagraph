@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: relagraph-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: relagraph
+      POSTGRES_USER: relagraph
+      POSTGRES_PASSWORD: relagraph
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U relagraph -d relagraph"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

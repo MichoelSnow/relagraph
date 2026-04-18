@@ -42,16 +42,16 @@ Phase gate:
 
 References: `docs/tech_stack.md`
 
-- [ ] Define two runtime profiles: `local/dev` and `prod`.
-- [ ] Create an environment variable contract doc section (required vars, meaning, and which profile uses each).
-- [ ] Add `.env.example` with all required variables and safe placeholders.
-- [ ] Add local/dev env configuration so app + API + DB run fully on a local machine.
-- [ ] Add prod env configuration contract (same variable names where possible; prod values provided by deployment platform/secrets manager).
-- [ ] Ensure DB connection wiring supports both profiles without code-path divergence in business logic.
-- [ ] Add scripts/commands for local bring-up, migration run, and app start.
+- [x] Define two runtime profiles: `local/dev` and `prod`.
+- [x] Create an environment variable contract doc section (required vars, meaning, and which profile uses each).
+- [x] Add `.env.example` with all required variables and safe placeholders.
+- [x] Add local/dev env configuration so app + API + DB run fully on a local machine.
+- [x] Add prod env configuration contract (same variable names where possible; prod values provided by deployment platform/secrets manager).
+- [x] Ensure DB connection wiring supports both profiles without code-path divergence in business logic.
+- [x] Add scripts/commands for local bring-up, migration run, and app start.
 
 Phase gate:
-- [ ] Fresh clone + local env setup can run DB migrations, start app, and exercise API/UI without external production dependencies.
+- [x] Fresh clone + local env setup can run DB migrations, start app, and exercise API/UI without external production dependencies.
 
 ---
 
