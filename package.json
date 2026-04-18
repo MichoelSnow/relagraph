@@ -18,26 +18,26 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
-    "@tanstack/react-query": "latest",
-    "cytoscape": "latest",
-    "drizzle-orm": "latest",
-    "next": "latest",
-    "pg": "latest",
-    "react": "latest",
-    "react-dom": "latest"
+    "@tanstack/react-query": "5.99.0",
+    "cytoscape": "3.33.2",
+    "drizzle-orm": "0.45.2",
+    "next": "16.2.4",
+    "pg": "8.20.0",
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.2",
-    "@types/node": "latest",
+    "@types/node": "25.6.0",
     "@types/pg": "^8.20.0",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "autoprefixer": "latest",
-    "drizzle-kit": "latest",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "autoprefixer": "10.5.0",
+    "drizzle-kit": "0.31.10",
     "eslint": "^9.39.4",
-    "eslint-config-next": "latest",
-    "postcss": "latest",
-    "tailwindcss": "latest",
-    "typescript": "latest"
+    "eslint-config-next": "16.2.4",
+    "postcss": "8.5.10",
+    "tailwindcss": "4.2.2",
+    "typescript": "6.0.3"
   }
 }

@@ -42,12 +42,22 @@ export async function POST(request: Request): Promise<NextResponse> {
     return jsonError(400, "invalid_request", "depth must be a non-negative integer")
   }
 
+  const asOf = body.as_of
+  const depth = body.depth ?? 0
+
   const graph = await buildGraphDeltaFromCenter({
     centerEntityId: body.center_entity_id.trim(),
+    asOf,
+    depth,
     alreadyLoadedEntityIds: new Set(asStringArray(body.already_loaded?.entity_ids)),
+    alreadyLoadedRelationshipIds: new Set(asStringArray(body.already_loaded?.relationship_ids)),
     allowedEntityKinds: body.filters?.entity_types?.length
-      ? new Set(body.filters.entity_types)
-      : null
+      ? new Set(asStringArray(body.filters.entity_types))
+      : null,
+    allowedRelationshipTypes: body.filters?.relationship_types?.length
+      ? new Set(asStringArray(body.filters.relationship_types))
+      : null,
+    includeInactive: body.filters?.include_inactive === true
   })
 
   if (!graph) {

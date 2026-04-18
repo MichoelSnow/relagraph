@@ -112,16 +112,16 @@ Phase gate:
 
 References: `docs/graph_projection_contract.md`, `docs/canonical_dtos.md`, `docs/sql_schema.md`
 
-- [ ] Implement traversal from center entity up to requested depth.
-- [ ] Apply filters before traversal.
-- [ ] Resolve active relationships at `as_of` using interval rules.
-- [ ] Implement delta behavior using `already_loaded.entity_ids` and `already_loaded.relationship_ids`.
-- [ ] Deduplicate entities and edges globally per response.
-- [ ] Return `GraphResponse` exactly.
-- [ ] Do not return layout/position data.
+- [x] Implement traversal from center entity up to requested depth.
+- [x] Apply filters before traversal.
+- [x] Resolve active relationships at `as_of` using interval rules.
+- [x] Implement delta behavior using `already_loaded.entity_ids` and `already_loaded.relationship_ids`.
+- [x] Deduplicate entities and edges globally per response.
+- [x] Return `GraphResponse` exactly.
+- [x] Do not return layout/position data.
 
 Phase gate:
-- [ ] `/api/v1/graph/view` returns UI-ready, time-resolved, deduplicated graph delta matching contract.
+- [x] `/api/v1/graph/view` returns UI-ready, time-resolved, deduplicated graph delta matching contract.
 
 ---
 
