@@ -92,19 +92,19 @@ References: `docs/api_spec.md`, `docs/graph_projection_contract.md`
 
 Implement in `/app/api/v1/...` or `/server/api/...`:
 
-- [ ] `POST /api/v1/graph/view`.
-- [ ] `POST /api/v1/entities`.
-- [ ] `POST /api/v1/relationships`.
-- [ ] `POST /api/v1/relationships/:id/intervals`.
-- [ ] `POST /api/v1/graph/expand` (required by frontend behavior in `docs/frontend_architecture.md` and defined in `docs/api_spec.md`).
+- [x] `POST /api/v1/graph/view`.
+- [x] `POST /api/v1/entities`.
+- [x] `POST /api/v1/relationships`.
+- [x] `POST /api/v1/relationships/:id/intervals`.
+- [x] `POST /api/v1/graph/expand` (required by frontend behavior in `docs/frontend_architecture.md` and defined in `docs/api_spec.md`).
 
 For all implemented endpoints:
-- [ ] Enforce `application/json`.
-- [ ] Return documented error envelope shape.
-- [ ] Use canonical DTOs for request/response typing.
+- [x] Enforce `application/json`.
+- [x] Return documented error envelope shape.
+- [x] Use canonical DTOs for request/response typing.
 
 Phase gate:
-- [ ] Endpoints are callable locally and respond with spec-compliant JSON shapes.
+- [x] Endpoints are callable locally and respond with spec-compliant JSON shapes.
 
 ---
 
