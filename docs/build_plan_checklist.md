@@ -27,14 +27,14 @@ This checklist is derived from and constrained by:
 
 References: `docs/tech_stack.md`, `docs/frontend_architecture.md`
 
-- [ ] Initialize Next.js with App Router + TypeScript + Tailwind CSS.
-- [ ] Create directories: `/app`, `/components`, `/lib`, `/server`, `/db`, `/types`.
-- [ ] Install dependencies: `react`, `next`, `typescript`, `tailwindcss`, `@tanstack/react-query`, `cytoscape`, `pg` (or equivalent Postgres driver), and one ORM.
-- [ ] Choose ORM and stay consistent across project.
-- [ ] Use Drizzle as default selection (preferred in `docs/tech_stack.md`) unless explicitly overridden.
+- [x] Initialize Next.js with App Router + TypeScript + Tailwind CSS.
+- [x] Create directories: `/app`, `/components`, `/lib`, `/server`, `/db`, `/types`.
+- [x] Install dependencies: `react`, `next`, `typescript`, `tailwindcss`, `@tanstack/react-query`, `cytoscape`, `pg` (or equivalent Postgres driver), and one ORM.
+- [x] Choose ORM and stay consistent across project.
+- [x] Use Drizzle as default selection (preferred in `docs/tech_stack.md`) unless explicitly overridden.
 
 Phase gate:
-- [ ] App boots locally and base routes compile with no type errors.
+- [x] App boots locally and base routes compile with no type errors.
 
 ---
 
