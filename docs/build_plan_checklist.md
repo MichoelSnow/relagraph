@@ -59,15 +59,15 @@ Phase gate:
 
 References: `docs/sql_schema.md`, `docs/relationship_graph_schema.md`
 
-- [ ] Create DB migration setup.
-- [ ] Implement all tables, enums, indexes, constraints, and FK behaviors exactly as specified.
-- [ ] Create `/db/schema.ts` reflecting SQL schema exactly.
-- [ ] Create `/db/client.ts` for Postgres connection.
-- [ ] Ensure no schema drift from `docs/sql_schema.md`.
+- [x] Create DB migration setup.
+- [x] Implement all tables, enums, indexes, constraints, and FK behaviors exactly as specified.
+- [x] Create `/db/schema.ts` reflecting SQL schema exactly.
+- [x] Create `/db/client.ts` for Postgres connection.
+- [x] Ensure no schema drift from `docs/sql_schema.md`.
 
 Phase gate:
-- [ ] Migrations apply cleanly on a fresh database.
-- [ ] Schema inspection confirms exact table/index/constraint presence.
+- [x] Migrations apply cleanly on a fresh database.
+- [x] Schema inspection confirms exact table/index/constraint presence.
 
 ---
 
