@@ -92,11 +92,16 @@ References: `docs/api_spec.md`, `docs/graph_projection_contract.md`
 
 Implement in `/app/api/v1/...` or `/server/api/...`:
 
-- [x] `POST /api/v1/graph/view`.
-- [x] `POST /api/v1/entities`.
-- [x] `POST /api/v1/relationships`.
-- [x] `POST /api/v1/relationships/:id/intervals`.
-- [x] `POST /api/v1/graph/expand` (required by frontend behavior in `docs/frontend_architecture.md` and defined in `docs/api_spec.md`).
+- [x] `POST /api/v1/auth/register`.
+- [x] `POST /api/v1/auth/login`.
+- [x] `POST /api/v1/auth/logout`.
+- [x] `GET /api/v1/auth/me`.
+- [x] `GET /api/v1/graphs` and `POST /api/v1/graphs`.
+- [x] `POST /api/v1/graphs/:graphId/graph/view`.
+- [x] `POST /api/v1/graphs/:graphId/graph/expand`.
+- [x] `GET /api/v1/graphs/:graphId/entities` and `POST /api/v1/graphs/:graphId/entities`.
+- [x] `POST /api/v1/graphs/:graphId/relationships`.
+- [x] `POST /api/v1/graphs/:graphId/relationships/:id/intervals`.
 
 For all implemented endpoints:
 - [x] Enforce `application/json`.
@@ -121,7 +126,7 @@ References: `docs/graph_projection_contract.md`, `docs/canonical_dtos.md`, `docs
 - [x] Do not return layout/position data.
 
 Phase gate:
-- [x] `/api/v1/graph/view` returns UI-ready, time-resolved, deduplicated graph delta matching contract.
+- [x] `/api/v1/graphs/:graphId/graph/view` returns UI-ready, time-resolved, deduplicated graph delta matching contract.
 
 ---
 
@@ -130,15 +135,15 @@ Phase gate:
 References: `docs/frontend_architecture.md`, `docs/ui_framework.md`, `docs/api_spec.md`
 
 Page and components:
-- [x] Create `/graph/[entityId]` route.
+- [x] Create `/graphs/[graphId]` route (with `/graph/[entityId]` legacy redirect compatibility).
 - [x] Implement `GraphCanvas` (Cytoscape).
 - [x] Implement `SidePanel` placeholder.
 - [x] Implement basic `TimeSlider`.
 
 Behavior:
-- [x] On load, call `/api/v1/graph/view` via TanStack Query.
+- [x] On load, call `/api/v1/graphs/:graphId/graph/view` via TanStack Query.
 - [x] Render nodes + edges from `GraphResponse`.
-- [x] On node click, call `/api/v1/graph/expand`.
+- [x] On node click, call `/api/v1/graphs/:graphId/graph/expand`.
 - [x] Merge returned delta into deduplicated client graph state.
 - [x] Keep filtering/time/traversal logic on backend.
 
@@ -147,20 +152,37 @@ Phase gate:
 
 ---
 
-## Phase 8: Minimal Editing Flows
+## Phase 8: Frontend UI Polish
+
+References: `docs/frontend_architecture.md`, `docs/ui_framework.md`
+
+Implement a focused design pass without changing backend contracts:
+
+- [ ] Define and apply shared UI tokens (typography, spacing, color variables) across login, graph list, and graph workspace.
+- [ ] Improve layout hierarchy and responsiveness for desktop + mobile breakpoints.
+- [ ] Upgrade visual styling for `GraphCanvas`, `SidePanel`, and `TimeSlider` while keeping behavior unchanged.
+- [ ] Improve empty/loading/error states for graph and auth flows.
+- [ ] Ensure interaction affordances are clear (selected node, hover/click cues, actionable controls).
+- [ ] Keep frontend changes compatible with existing API contracts and backend graph logic boundaries.
+
+Phase gate:
+- [ ] UI is visually cohesive, responsive, and production-acceptable without behavioral regressions.
+
+---
+
+## Phase 9: Minimal Editing Flows
 
 References: `docs/editing_flows.md`, `docs/api_spec.md`
 
 Implement minimal UI forms and API wiring for:
 
 - [ ] Create Entity flow:
-- [ ] `POST /entities`.
-- [ ] Optional `POST /entity-names` support if included in UI.
+- [x] `POST /api/v1/graphs/:graphId/entities`.
 - [ ] Refresh graph or merge returned entity per flow rules.
 
 - [ ] Create Relationship flow:
-- [ ] `POST /relationships`.
-- [ ] `POST /relationships/:id/intervals`.
+- [x] `POST /api/v1/graphs/:graphId/relationships`.
+- [x] `POST /api/v1/graphs/:graphId/relationships/:id/intervals`.
 - [ ] Refetch graph or merge delta per flow rules.
 
 Phase gate:
@@ -168,7 +190,7 @@ Phase gate:
 
 ---
 
-## Phase 9: Constraint Compliance Check
+## Phase 10: Constraint Compliance Check
 
 References: all docs above
 
@@ -183,13 +205,13 @@ Phase gate:
 
 ---
 
-## Phase 10: Final Deliverables Verification
+## Phase 11: Final Deliverables Verification
 
 - [ ] Project runs locally.
 - [ ] Local/dev profile is documented and reproducible on a fresh machine.
 - [ ] DB migrations work on clean DB.
-- [ ] `/api/v1/graph/view` returns valid `GraphResponse` payload.
-- [ ] Basic graph renders in UI on `/graph/[entityId]`.
+- [ ] `/api/v1/graphs/:graphId/graph/view` returns valid `GraphResponse` payload.
+- [ ] Basic graph renders in UI on `/graphs/[graphId]`.
 - [ ] End-to-end flow works for create entity + create relationship + retrieve graph view.
 - [ ] Prod profile variables and deployment configuration contract are documented.
 

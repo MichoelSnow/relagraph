@@ -2,14 +2,14 @@
 
 ## Overview
 
-Defines the v1 HTTP API for Relagraph.
+Defines the implemented v1 HTTP API for Relagraph.
 
 Principles:
-- Graph reads via **projection endpoints**
-- Writes via **domain/CRUD endpoints**
-- JSON only
+- JSON-only API
+- Cookie-based authentication for protected routes
+- Graph-scoped reads and writes (`/graphs/:graphId/...`)
 
-Base Path:
+Base path:
 `/api/v1`
 
 ---
@@ -30,16 +30,121 @@ Base Path:
 }
 ```
 
+### Auth
+- Session cookie is set by auth endpoints.
+- Protected endpoints return `401` when no valid session exists.
+- Graph-scoped endpoints return `404` when graph access is denied/not found.
+
 ---
 
-# Graph Projection (Read)
+## Auth
 
-## POST /graph/view
+### POST `/auth/register`
+Create a user account and establish a session.
 
-### Purpose
-Return a **UI-ready, time-resolved subgraph** around a center entity.
+Request:
+```json
+{
+  "email": "user@example.com",
+  "password": "min-8-chars"
+}
+```
 
-### Request
+Response (`201`):
+```json
+{
+  "id": "uuid",
+  "email": "user@example.com"
+}
+```
+
+### POST `/auth/login`
+Authenticate and establish a session.
+
+Request:
+```json
+{
+  "email": "user@example.com",
+  "password": "string"
+}
+```
+
+Response (`200`):
+```json
+{
+  "id": "uuid",
+  "email": "user@example.com"
+}
+```
+
+### POST `/auth/logout`
+Revoke current session and clear cookie.
+
+Response (`200`):
+```json
+{
+  "ok": true
+}
+```
+
+### GET `/auth/me`
+Get current authenticated user.
+
+Response (`200`):
+```json
+{
+  "id": "uuid",
+  "email": "user@example.com"
+}
+```
+
+---
+
+## Graphs
+
+### GET `/graphs`
+List graphs owned by authenticated user.
+
+Response (`200`):
+```json
+{
+  "graphs": [
+    {
+      "id": "uuid",
+      "name": "Family Graph",
+      "created_at": "ISO timestamp",
+      "updated_at": "ISO timestamp"
+    }
+  ]
+}
+```
+
+### POST `/graphs`
+Create a graph owned by authenticated user.
+
+Request:
+```json
+{
+  "name": "Family Graph"
+}
+```
+
+Response (`201`):
+```json
+{
+  "id": "uuid",
+  "name": "Family Graph"
+}
+```
+
+---
+
+## Graph Projection (Read)
+
+### POST `/graphs/:graphId/graph/view`
+Return UI-ready, time-resolved graph delta around a center entity.
+
+Request:
 ```json
 {
   "center_entity_id": "uuid",
@@ -57,7 +162,7 @@ Return a **UI-ready, time-resolved subgraph** around a center entity.
 }
 ```
 
-### Response
+Response (`200`):
 ```json
 {
   "entities": [
@@ -73,10 +178,7 @@ Return a **UI-ready, time-resolved subgraph** around a center entity.
       "relationship_type": "romantic",
       "from_entity_id": "uuid",
       "to_entity_id": "uuid",
-      "roles": {
-        "from": "partner",
-        "to": "partner"
-      },
+      "roles": { "from": "partner", "to": "partner" },
       "active": true,
       "start": "2020-01-01T00:00:00Z",
       "end": null
@@ -90,14 +192,10 @@ Return a **UI-ready, time-resolved subgraph** around a center entity.
 }
 ```
 
----
+### POST `/graphs/:graphId/graph/expand`
+Expand from an entity within the same graph; response shape matches `/graph/view`.
 
-## POST /graph/expand
-
-### Purpose
-Expand a node within an existing graph.
-
-### Request
+Request:
 ```json
 {
   "entity_id": "uuid",
@@ -111,16 +209,17 @@ Expand a node within an existing graph.
 }
 ```
 
-### Response
-Same shape as `/graph/view` (delta only)
-
 ---
 
-# Entities
+## Entities
 
-## POST /entities
-Create entity
+### GET `/graphs/:graphId/entities`
+List entities for one graph.
 
+### POST `/graphs/:graphId/entities`
+Create entity in one graph.
+
+Request:
 ```json
 {
   "entity_kind": "person",
@@ -128,18 +227,23 @@ Create entity
 }
 ```
 
-## GET /entities/:id
-Get entity
-
-## PATCH /entities/:id
-Update entity
+Response (`201`):
+```json
+{
+  "id": "uuid",
+  "entity_kind": "person",
+  "display_name": "Alex"
+}
+```
 
 ---
 
-# Relationships
+## Relationships
 
-## POST /relationships
+### POST `/graphs/:graphId/relationships`
+Create relationship in one graph.
 
+Request:
 ```json
 {
   "relationship_type": "romantic",
@@ -150,15 +254,21 @@ Update entity
 }
 ```
 
-## PATCH /relationships/:id
-Update relationship metadata
+Response (`201`):
+```json
+{
+  "id": "uuid",
+  "relationship_type": "romantic",
+  "participants": [
+    { "relationship_id": "uuid", "entity_id": "uuid", "role": "partner" }
+  ]
+}
+```
 
----
+### POST `/graphs/:graphId/relationships/:id/intervals`
+Create relationship interval.
 
-# Relationship Intervals
-
-## POST /relationships/:id/intervals
-
+Request:
 ```json
 {
   "start": "2020-01-01T00:00:00Z",
@@ -166,71 +276,19 @@ Update relationship metadata
 }
 ```
 
-## PATCH /intervals/:id
-Update interval
-
-## DELETE /intervals/:id
-Remove interval
-
----
-
-# Events
-
-## POST /events
-
+Response (`201`):
 ```json
 {
-  "event_type": "wedding",
-  "start": "2024-01-01T00:00:00Z"
-}
-```
-
-## PATCH /events/:id
-
----
-
-# Names
-
-## POST /entity-names
-
-```json
-{
-  "entity_id": "uuid",
-  "name_text": "Alex",
-  "name_type": "chosen"
-}
-```
-
-## PATCH /entity-names/:id
-
----
-
-# Media
-
-## POST /media
-
-```json
-{
-  "media_type": "photo",
-  "url": "string"
-}
-```
-
-## POST /media/link
-
-```json
-{
-  "media_id": "uuid",
-  "subject_type": "entity",
-  "subject_id": "uuid"
+  "id": "uuid",
+  "relationship_id": "uuid",
+  "start": "2020-01-01T00:00:00Z",
+  "end": null
 }
 ```
 
 ---
 
-# Notes
+## Notes
 
-- Graph endpoints are the **primary read interface**
-- CRUD endpoints are used for **editing and mutation**
-- Events are **not included in graph projection (v1)**
-- All graph semantics defined in **Graph Projection Contract**
+- Unscoped legacy endpoints (`/entities`, `/relationships`, `/graph/view`, etc.) are removed.
+- Graph projection behavior is defined in `graph_projection_contract.md`.

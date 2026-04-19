@@ -59,11 +59,12 @@ _Last updated: 2026-04-18_
   - Pure helpers in `server/`, `lib/`, and DTO/mapper logic.
   - Graph projection rules (filter-before-traversal, interval activity at `as_of`, dedup, delta behavior).
 - API route integration tests:
-  - `POST /api/v1/graph/view`
-  - `POST /api/v1/graph/expand`
-  - `POST /api/v1/entities`
-  - `POST /api/v1/relationships`
-  - `POST /api/v1/relationships/:id/intervals`
+  - `POST /api/v1/graphs/:graphId/graph/view`
+  - `POST /api/v1/graphs/:graphId/graph/expand`
+  - `POST /api/v1/graphs/:graphId/entities`
+  - `POST /api/v1/graphs/:graphId/relationships`
+  - `POST /api/v1/graphs/:graphId/relationships/:id/intervals`
+  - Auth smoke routes (`/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/me`)
   - Include success, validation failure, and not-found cases.
 - Database and migration tests:
   - Validate migrations apply cleanly on a fresh database.
@@ -73,7 +74,7 @@ _Last updated: 2026-04-18_
   - `GraphExplorer` behavior for initial view fetch + expand merge.
   - Error and loading states.
 - End-to-end smoke tests:
-  - Minimal happy path: create entity, create relationship, load `/graph/[entityId]`, expand node.
+  - Minimal happy path: login, create graph, create entity, create relationship, load `/graphs/[graphId]`, expand node.
 
 ### Contract-Focused Coverage
 
