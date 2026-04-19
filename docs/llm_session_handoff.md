@@ -73,40 +73,46 @@ Primary repo: `/home/msnow/git/relagraph`
 - Phases 10-11 are not started.
 
 ### Current objective
-- Complete Phase 9 end-to-end editing UX behavior, then move into Phase 10 compliance verification.
+- Complete Phase 9 editing UX behavior (entity/relationship authoring + edit paths), then move into Phase 10 compliance verification.
 
 ### Completed this session
-- Completed Phase 8 frontend UI polish:
-  - shared tokens/background/animation in `app/globals.css`
-  - updated auth screen, graph list, graph workspace layout and styling
-  - improved `GraphCanvas`, `TimeSlider`, and `SidePanel` visual and interaction cues
-  - improved empty/loading/error states for auth/graph flows
-- Checked off all Phase 8 checklist items + phase gate in `docs/build_plan_checklist.md`.
-- Synced docs to implemented auth + graph-scoped architecture:
-  - `docs/api_spec.md`
-  - `docs/sql_schema.md`
-  - `docs/graph_projection_contract.md`
-  - `docs/editing_flows.md`
-  - `docs/frontend_architecture.md`
-- Updated supporting docs to remove stale unscoped endpoint references:
-  - `docs/engineering_guide.md`
-  - `docs/build_plan_checklist.md`
-- Confirmed repo working tree is currently clean.
+- Implemented centralized UI abstraction layer for style propagation:
+  - `lib/ui/styles.ts` (shared tokens + component style contracts + graph palette)
+  - `lib/ui/cx.ts`
+  - `components/ui/{Button,Input,Select,Card,Badge,SectionHeader}.tsx`
+- Migrated key screens/components to shared UI primitives:
+  - `components/auth/AuthForm.tsx`
+  - `components/graphs/GraphList.tsx`
+  - `components/graph/{GraphWorkspace,GraphExplorer,GraphCanvas,SidePanel,TimeSlider}.tsx`
+- Reworked `/graphs/[graphId]` into a canvas-first layout:
+  - removed ID-heavy UI from main presentation
+  - top bar + primary graph scene + side inspector
+  - manager controls are toggleable instead of always visible
+- Fixed runtime crash source identified from stack trace in Cytoscape:
+  - crash was in Cytoscape layout/batch lifecycle (not React Query)
+  - stabilized GraphCanvas cleanup/listener lifecycle and disabled layout animation churn
+  - re-enabled wheel zoom by request (`userZoomingEnabled: true`, tuned sensitivity)
+- Updated handoff/checklist docs previously to reflect API/schema/auth changes and Phase 8 completion.
 
 ### In progress / open
-- Editing flows are only partially reflected in UI behavior (create entity/relationship UX completion + graph refresh/merge still open in checklist).
+- Editing flows are only partially reflected in UI behavior:
+  - create entity exists
+  - create relationship UI flow is not implemented
+  - edit entity/relationship UI flows are not implemented
+  - post-mutation graph refresh/merge behavior still needs full completion for Phase 9 gate
 - Need final compliance pass to ensure code/docs remain fully aligned with source-of-truth docs.
 
 ### Next concrete steps
-1. Complete Phase 9 UI mutation behavior: wire create entity + create relationship + interval flows with deterministic graph refresh/merge after success.
-2. Run verification (`pnpm lint`, `pnpm typecheck`, `pnpm build`) and then check off completed Phase 9 items in `docs/build_plan_checklist.md`.
-3. Execute Phase 10 compliance review and update docs/checklist with final status.
+1. Implement missing Phase 9 UI flows: create relationship + interval, and entity/relationship edit paths (if in scope of current phase definition).
+2. Add deterministic post-mutation graph update behavior (invalidate/refetch or merge strategy) and verify from UI.
+3. Run verification (`pnpm lint`, `pnpm typecheck`, `pnpm build` where environment permits), then update `docs/build_plan_checklist.md` for Phase 9/10 progress.
 
 ### Key decisions and constraints
 - Multi-tenant model is now enforced via auth + graph ownership boundaries.
 - API is graph-scoped; unscoped legacy endpoints were removed.
 - Graph projection logic stays backend-only (no client-side traversal/time resolution/filter semantics).
 - Canonical DTOs in `types/canonical.ts` remain the shared contract.
+- UI direction is now **High-contrast Data Console** with centralized design primitives; future style changes should primarily happen in shared UI/style files, not page-level one-offs.
 
 ### Key files to read first on resume
 - `docs/build_plan_checklist.md`
@@ -116,20 +122,24 @@ Primary repo: `/home/msnow/git/relagraph`
 - `docs/frontend_architecture.md`
 - `docs/editing_flows.md`
 - `docs/engineering_guide.md`
+- `lib/ui/styles.ts`
+- `components/graph/GraphWorkspace.tsx`
+- `components/graph/GraphExplorer.tsx`
 
 ### Verification run (latest)
-- Latest checks during Phase 8:
+- Latest checks during current UI redesign/debug session:
   - `pnpm lint` passed
   - `pnpm typecheck` passed
   - `pnpm build` blocked in sandbox by Turbopack process/port binding permission (`os error 1`), not a code type/lint failure
 - Current branch: `feature/initial-build`
 
 ### Working tree state (latest known)
-- `git status --short`: multiple tracked UI/doc files modified for Phase 8 + documentation updates
+- `git status --short`: clean (no output)
 
 ### Risks / caveats
 - Docs are now aligned to graph-scoped/auth model; any future endpoint/schema changes must update docs in the same PR.
-- Phase 8 polish is intentionally separated from behavior changes; avoid mixing visual refactor with API contract changes.
+- Cytoscape can crash on aggressive remount/layout churn; keep lifecycle cleanup explicit and avoid unnecessary instance recreation patterns.
+- Phase 8 polish is complete; remaining work is mostly functional Phase 9 UX completion.
 - Keep checklist checkboxes accurate as sections are completed.
 
 ### Resume prompt (paste at next session start)
