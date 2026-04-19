@@ -88,6 +88,7 @@ _Last updated: 2026-04-18_
 ### CI Expectations
 
 - Current mandatory checks in CI:
+  - `gitleaks detect --no-git --source . --redact`
   - `pnpm lint`
   - `pnpm typecheck`
   - `pnpm build`
