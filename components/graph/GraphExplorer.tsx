@@ -5,6 +5,9 @@ import { useMemo, useState } from "react"
 
 import { fetchGraphExpand, fetchGraphView } from "@/lib/api/graph"
 import type { Edge, Entity, GraphResponse } from "@/types"
+import Badge from "@/components/ui/Badge"
+import Card from "@/components/ui/Card"
+import SectionHeader from "@/components/ui/SectionHeader"
 import GraphCanvas from "./GraphCanvas"
 import SidePanel from "./SidePanel"
 import TimeSlider from "./TimeSlider"
@@ -157,43 +160,54 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
   return (
     <section className="grid w-full gap-4 lg:grid-cols-[1fr_280px]">
       <section className="space-y-4">
-        <header className="rounded-md border border-slate-300 bg-white p-3">
-          <h1 className="text-base font-semibold text-slate-900">Graph Explorer</h1>
-          <p className="mt-1 text-sm text-slate-600">Center entity: {entityId}</p>
-        </header>
+        <Card as="header" className="fade-in p-4 shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <SectionHeader className="text-[#6fe8ff]">Graph Explorer</SectionHeader>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                <Badge>Nodes: {entities.length}</Badge>
+                <Badge>Edges: {edges.length}</Badge>
+                <Badge variant={isLoading ? "accent" : "success"}>{isLoading ? "Syncing..." : "Synced"}</Badge>
+              </div>
+            </div>
 
-        <TimeSlider
-          asOf={uiState.asOf}
-          onChange={(nextAsOf) => {
-            setUiState((previous) => ({ ...previous, asOf: nextAsOf }))
-          }}
-        />
+            <div className="min-w-0 flex-1 lg:max-w-[420px]">
+              <TimeSlider
+                asOf={uiState.asOf}
+                onChange={(nextAsOf) => {
+                  setUiState((previous) => ({ ...previous, asOf: nextAsOf }))
+                }}
+              />
+            </div>
+          </div>
+        </Card>
 
         {errorMessage ? (
-          <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          <Card variant="danger" className="p-3 text-sm">
             {errorMessage}
-          </p>
+          </Card>
         ) : null}
 
-        <GraphCanvas
-          entities={entities}
-          edges={edges}
-          onNodeClick={(clickedEntityId) => {
-            setSelectedEntityId(clickedEntityId)
-            expandMutation.mutate(clickedEntityId)
-          }}
-        />
-
-        <p className="text-xs text-slate-600">
-          {isLoading ? "Loading graph..." : `Loaded ${entities.length} nodes and ${edges.length} edges.`}
-        </p>
+        <Card className="p-3 shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
+          <GraphCanvas
+            entities={entities}
+            edges={edges}
+            selectedEntityId={selectedEntityId}
+            onNodeClick={(clickedEntityId) => {
+              setSelectedEntityId(clickedEntityId)
+              expandMutation.mutate(clickedEntityId)
+            }}
+          />
+        </Card>
       </section>
 
-      <SidePanel
-        selectedEntityId={selectedEntityId}
-        nodeCount={entities.length}
-        edgeCount={edges.length}
-      />
+      <div className="lg:sticky lg:top-4 lg:self-start">
+        <SidePanel
+          selectedEntityId={selectedEntityId}
+          nodeCount={entities.length}
+          edgeCount={edges.length}
+        />
+      </div>
     </section>
   )
 }

@@ -158,15 +158,15 @@ References: `docs/frontend_architecture.md`, `docs/ui_framework.md`
 
 Implement a focused design pass without changing backend contracts:
 
-- [ ] Define and apply shared UI tokens (typography, spacing, color variables) across login, graph list, and graph workspace.
-- [ ] Improve layout hierarchy and responsiveness for desktop + mobile breakpoints.
-- [ ] Upgrade visual styling for `GraphCanvas`, `SidePanel`, and `TimeSlider` while keeping behavior unchanged.
-- [ ] Improve empty/loading/error states for graph and auth flows.
-- [ ] Ensure interaction affordances are clear (selected node, hover/click cues, actionable controls).
-- [ ] Keep frontend changes compatible with existing API contracts and backend graph logic boundaries.
+- [x] Define and apply shared UI tokens (typography, spacing, color variables) across login, graph list, and graph workspace.
+- [x] Improve layout hierarchy and responsiveness for desktop + mobile breakpoints.
+- [x] Upgrade visual styling for `GraphCanvas`, `SidePanel`, and `TimeSlider` while keeping behavior unchanged.
+- [x] Improve empty/loading/error states for graph and auth flows.
+- [x] Ensure interaction affordances are clear (selected node, hover/click cues, actionable controls).
+- [x] Keep frontend changes compatible with existing API contracts and backend graph logic boundaries.
 
 Phase gate:
-- [ ] UI is visually cohesive, responsive, and production-acceptable without behavioral regressions.
+- [x] UI is visually cohesive, responsive, and production-acceptable without behavioral regressions.
 
 ---
 

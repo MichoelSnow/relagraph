@@ -7,6 +7,11 @@ import { useRouter } from "next/navigation"
 
 import { logout } from "@/lib/api/auth"
 import { createGraph, fetchGraphs } from "@/lib/api/graphs"
+import Badge from "@/components/ui/Badge"
+import Button from "@/components/ui/Button"
+import Card from "@/components/ui/Card"
+import Input from "@/components/ui/Input"
+import SectionHeader from "@/components/ui/SectionHeader"
 
 export default function GraphList() {
   const [name, setName] = useState("")
@@ -47,65 +52,94 @@ export default function GraphList() {
   }
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-3xl p-4">
-      <header className="mb-4 flex items-center justify-between rounded-md border border-slate-300 bg-white p-4">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Your Graphs</h1>
-          <p className="text-sm text-slate-600">Select an existing graph or create a new one.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => logoutMutation.mutate()}
-          className="rounded border border-slate-300 px-3 py-2 text-sm text-slate-700"
-        >
-          Logout
-        </button>
-      </header>
+    <main className="console-atmosphere relative min-h-screen overflow-hidden bg-[var(--console-bg)] px-5 py-8 md:px-8 md:py-10">
+      <div className="console-grid pointer-events-none absolute inset-0 opacity-[0.12]" />
 
-      <form className="mb-4 rounded-md border border-slate-300 bg-white p-4" onSubmit={onSubmit}>
-        <label className="block text-sm text-slate-700">
-          New graph name
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            placeholder="Family graph"
-            required
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={createGraphMutation.isPending}
-          className="mt-3 rounded bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {createGraphMutation.isPending ? "Creating..." : "Create graph"}
-        </button>
-        {createGraphMutation.error ? (
-          <p className="mt-3 text-sm text-rose-700">{(createGraphMutation.error as Error).message}</p>
-        ) : null}
-      </form>
+      <section className="relative z-10 mx-auto w-full max-w-6xl">
+        <Card as="header" className="fade-in mb-5 p-5 shadow-[var(--console-shadow-strong)]">
+          <div className="mb-3 flex items-center justify-between border-b border-[var(--console-border)] pb-3">
+            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#6fe8ff]">Relagraph Console</p>
+            <Badge>/graphs</Badge>
+          </div>
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--console-success)]">Workspace</p>
+              <h1 className="mt-1 text-2xl font-semibold text-[var(--console-text-strong)]">Your Graphs</h1>
+              <p className="mt-1 text-sm text-[var(--console-text-dim)]">Select an existing graph or create a new one.</p>
+            </div>
+            <Button
+              type="button"
+              onClick={() => logoutMutation.mutate()}
+              variant="ghost"
+              block
+              className="md:w-auto"
+            >
+              Logout
+            </Button>
+          </div>
+        </Card>
 
-      <section className="rounded-md border border-slate-300 bg-white p-4">
-        <h2 className="text-sm font-semibold text-slate-900">Existing graphs</h2>
-        {graphsQuery.isLoading ? <p className="mt-2 text-sm text-slate-600">Loading...</p> : null}
-        {graphsQuery.error ? (
-          <p className="mt-2 text-sm text-rose-700">{(graphsQuery.error as Error).message}</p>
-        ) : null}
-        {graphs.length === 0 && !graphsQuery.isLoading ? (
-          <p className="mt-2 text-sm text-slate-600">No graphs yet.</p>
-        ) : null}
-        <ul className="mt-3 space-y-2">
-          {graphs.map((graph) => (
-            <li key={graph.id}>
-              <Link
-                href={`/graphs/${graph.id}`}
-                className="block rounded border border-slate-200 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50"
-              >
-                {graph.name}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <Card as="form" className="stagger-1 fade-in mb-5 p-5" onSubmit={onSubmit}>
+          <label className="block">
+            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--console-text-muted)]">New graph name</span>
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Family graph"
+              required
+            />
+          </label>
+          <Button
+            type="submit"
+            disabled={createGraphMutation.isPending}
+            variant="primary"
+            className="mt-3 tracking-[0.14em]"
+          >
+            {createGraphMutation.isPending ? "Creating..." : "Create graph"}
+          </Button>
+          {createGraphMutation.error ? (
+            <Card variant="danger" className="mt-3 px-3 py-2 text-sm">
+              {(createGraphMutation.error as Error).message}
+            </Card>
+          ) : null}
+        </Card>
+
+        <Card className="stagger-2 fade-in p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <SectionHeader>Existing graphs</SectionHeader>
+            <Badge>{graphs.length} total</Badge>
+          </div>
+          {graphsQuery.isLoading ? (
+            <Card variant="subpanel" className="p-3 text-sm text-[var(--console-text-dim)]">
+              Loading your graphs...
+            </Card>
+          ) : null}
+          {graphsQuery.error ? (
+            <Card variant="danger" className="p-3 text-sm">
+              {(graphsQuery.error as Error).message}
+            </Card>
+          ) : null}
+          {graphs.length === 0 && !graphsQuery.isLoading ? (
+            <Card variant="subpanel" className="border-dashed p-5 text-sm text-[var(--console-text-dim)]">
+              No graphs yet. Create your first graph above to get started.
+            </Card>
+          ) : null}
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {graphs.map((graph) => (
+              <li key={graph.id}>
+                <Link
+                  href={`/graphs/${graph.id}`}
+                  className="block rounded-xl border border-[var(--console-border)] bg-[var(--console-panel-muted)] px-4 py-3 text-[var(--console-text)] transition hover:-translate-y-0.5 hover:border-[var(--console-accent)] hover:bg-[#0f1f35]"
+                >
+                  <p className="truncate font-semibold text-[var(--console-text-strong)]">{graph.name}</p>
+                  <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--console-text-muted)]">
+                    Open graph workspace
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
       </section>
     </main>
   )

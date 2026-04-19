@@ -2,6 +2,8 @@
 
 import { useMemo } from "react"
 
+import Button from "@/components/ui/Button"
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 type TimeSliderProps = {
@@ -18,18 +20,23 @@ export default function TimeSlider({ asOf, onChange }: TimeSliderProps) {
   const value = Math.round((Date.parse(asOf) - startOfToday) / MS_PER_DAY)
 
   return (
-    <section className="rounded-md border border-slate-300 bg-white p-3">
-      <div className="flex items-center justify-between">
-        <label htmlFor="time-slider" className="text-sm font-medium text-slate-700">
+    <div className="rounded-lg border border-[var(--console-border)] bg-[var(--console-subpanel)] px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <label
+          htmlFor="time-slider"
+          className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--console-text-muted)]"
+        >
           Time
         </label>
-        <button
+        <Button
           type="button"
-          className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+          size="sm"
+          variant="ghost"
+          className="px-2.5 py-1"
           onClick={() => onChange(new Date().toISOString())}
         >
           Now
-        </button>
+        </Button>
       </div>
       <input
         id="time-slider"
@@ -43,9 +50,11 @@ export default function TimeSlider({ asOf, onChange }: TimeSliderProps) {
           const nextAsOf = new Date(startOfToday + nextValue * MS_PER_DAY).toISOString()
           onChange(nextAsOf)
         }}
-        className="mt-3 w-full"
+        className="mt-2 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[#24324d] accent-[var(--console-accent)]"
       />
-      <p className="mt-2 text-xs text-slate-600">{new Date(asOf).toISOString()}</p>
-    </section>
+      <p suppressHydrationWarning className="mt-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--console-text-muted)]">
+        {new Date(asOf).toISOString()}
+      </p>
+    </div>
   )
 }
