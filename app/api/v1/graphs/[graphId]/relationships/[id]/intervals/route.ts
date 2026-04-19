@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto"
 
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 
 import { getDb } from "@/db/client"
 import { relationship, relationshipInterval } from "@/db/schema"
+import { requireApiGraphAccess } from "@/server/api/auth"
 import { isIsoTimestamp, isJsonRequest, jsonError } from "@/server/api/http"
 import type { RelationshipInterval } from "@/types"
 
@@ -13,15 +14,20 @@ type CreateRelationshipIntervalRequest = {
   end?: string | null
 }
 
-export async function POST(
-  request: Request,
-  context: { params: Promise<{ id: string }> }
-): Promise<NextResponse> {
+type RouteContext = {
+  params: Promise<{ graphId: string; id: string }>
+}
+
+export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
+  const { graphId, id } = await context.params
+  const auth = await requireApiGraphAccess(graphId)
+  if (!auth.user) {
+    return auth.response
+  }
+
   if (!isJsonRequest(request)) {
     return jsonError(415, "unsupported_media_type", "Content-Type must be application/json")
   }
-
-  const { id } = await context.params
 
   let body: CreateRelationshipIntervalRequest
   try {
@@ -43,7 +49,7 @@ export async function POST(
   const [relationshipRecord] = await db
     .select({ id: relationship.id })
     .from(relationship)
-    .where(eq(relationship.id, id))
+    .where(and(eq(relationship.id, id), eq(relationship.graphId, graphId)))
     .limit(1)
 
   if (!relationshipRecord) {

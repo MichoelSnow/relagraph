@@ -16,14 +16,59 @@ import {
 
 export const entityKindEnum = pgEnum("entity_kind_enum", ["person", "animal", "place"])
 
+export const appUser = pgTable(
+  "app_user",
+  {
+    id: uuid("id").primaryKey(),
+    email: text("email").notNull().unique(),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow()
+  },
+  (table) => [index("idx_app_user_email").on(table.email)]
+)
+
+export const userGraph = pgTable(
+  "user_graph",
+  {
+    id: uuid("id").primaryKey(),
+    ownerUserId: uuid("owner_user_id")
+      .notNull()
+      .references(() => appUser.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow()
+  },
+  (table) => [index("idx_user_graph_owner_user_id").on(table.ownerUserId)]
+)
+
+export const userSession = pgTable(
+  "user_session",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => appUser.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { mode: "string" }).notNull(),
+    createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow()
+  },
+  (table) => [
+    index("idx_user_session_user_id").on(table.userId),
+    index("idx_user_session_expires_at").on(table.expiresAt)
+  ]
+)
+
 export const entity = pgTable("entity", {
   id: uuid("id").primaryKey(),
+  graphId: uuid("graph_id").references(() => userGraph.id, { onDelete: "cascade" }),
   entityKind: entityKindEnum("entity_kind").notNull(),
   canonicalDisplayName: text("canonical_display_name").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow()
-})
+},
+(table) => [index("idx_entity_graph_id").on(table.graphId)])
 
 export const personProfile = pgTable(
   "person_profile",
@@ -124,13 +169,15 @@ export const relationshipType = pgTable("relationship_type", {
 
 export const relationship = pgTable("relationship", {
   id: uuid("id").primaryKey(),
+  graphId: uuid("graph_id").references(() => userGraph.id, { onDelete: "cascade" }),
   relationshipTypeId: uuid("relationship_type_id")
     .notNull()
     .references(() => relationshipType.id),
   notes: text("notes"),
   createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow()
-})
+},
+(table) => [index("idx_relationship_graph_id").on(table.graphId)])
 
 export const relationshipParticipant = pgTable(
   "relationship_participant",

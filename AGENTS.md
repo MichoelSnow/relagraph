@@ -9,6 +9,7 @@
  - Avoid copy-paste divergence across files
  - Handle edge cases explicitly (empty inputs, missing data, partial failures)
  - Update docs when behavior or data flows change
+ - Before v1.0 production, do not keep legacy/historical compatibility code paths; remove superseded code instead of preserving it for history
 
 
 ## Testing expectations

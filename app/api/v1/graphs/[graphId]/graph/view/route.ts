@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { requireApiGraphAccess } from "@/server/api/auth"
 import { asStringArray, isIsoTimestamp, isJsonRequest, jsonError } from "@/server/api/http"
 import { buildGraphDeltaFromCenter } from "@/server/graph/projection"
 
@@ -18,7 +19,17 @@ type GraphViewRequest = {
   }
 }
 
-export async function POST(request: Request): Promise<NextResponse> {
+type RouteContext = {
+  params: Promise<{ graphId: string }>
+}
+
+export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
+  const { graphId } = await context.params
+  const auth = await requireApiGraphAccess(graphId)
+  if (!auth.user) {
+    return auth.response
+  }
+
   if (!isJsonRequest(request)) {
     return jsonError(415, "unsupported_media_type", "Content-Type must be application/json")
   }
@@ -42,13 +53,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     return jsonError(400, "invalid_request", "depth must be a non-negative integer")
   }
 
-  const asOf = body.as_of
-  const depth = body.depth ?? 0
-
   const graph = await buildGraphDeltaFromCenter({
+    graphId,
     centerEntityId: body.center_entity_id.trim(),
-    asOf,
-    depth,
+    asOf: body.as_of,
+    depth: body.depth ?? 0,
     alreadyLoadedEntityIds: new Set(asStringArray(body.already_loaded?.entity_ids)),
     alreadyLoadedRelationshipIds: new Set(asStringArray(body.already_loaded?.relationship_ids)),
     allowedEntityKinds: body.filters?.entity_types?.length

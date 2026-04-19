@@ -1,10 +1,11 @@
-import { eq, inArray } from "drizzle-orm"
+import { and, eq, inArray } from "drizzle-orm"
 
 import { getDb } from "@/db/client"
 import { entity, relationship, relationshipInterval, relationshipParticipant, relationshipType } from "@/db/schema"
 import type { Edge, Entity, GraphResponse } from "@/types"
 
 type BuildGraphDeltaInput = {
+  graphId: string
   centerEntityId: string
   asOf: string
   depth: number
@@ -138,7 +139,7 @@ function resolveRelationshipEdge(
   }
 }
 
-async function fetchEntitiesByIds(ids: string[]): Promise<Map<string, EntityRow>> {
+async function fetchEntitiesByIds(graphId: string, ids: string[]): Promise<Map<string, EntityRow>> {
   if (ids.length === 0) {
     return new Map()
   }
@@ -151,12 +152,15 @@ async function fetchEntitiesByIds(ids: string[]): Promise<Map<string, EntityRow>
       canonicalDisplayName: entity.canonicalDisplayName
     })
     .from(entity)
-    .where(inArray(entity.id, ids))
+    .where(and(inArray(entity.id, ids), eq(entity.graphId, graphId)))
 
   return new Map(rows.map((row) => [row.id, row]))
 }
 
-async function fetchRelationshipBundles(relationshipIds: string[]): Promise<RelationshipBundle[]> {
+async function fetchRelationshipBundles(
+  graphId: string,
+  relationshipIds: string[]
+): Promise<RelationshipBundle[]> {
   if (relationshipIds.length === 0) {
     return []
   }
@@ -169,7 +173,7 @@ async function fetchRelationshipBundles(relationshipIds: string[]): Promise<Rela
     })
     .from(relationship)
     .innerJoin(relationshipType, eq(relationship.relationshipTypeId, relationshipType.id))
-    .where(inArray(relationship.id, relationshipIds))
+    .where(and(inArray(relationship.id, relationshipIds), eq(relationship.graphId, graphId)))
 
   const participantRows = await db
     .select({
@@ -221,7 +225,7 @@ export async function buildGraphDeltaFromCenter(input: BuildGraphDeltaInput): Pr
       canonicalDisplayName: entity.canonicalDisplayName
     })
     .from(entity)
-    .where(eq(entity.id, input.centerEntityId))
+    .where(and(eq(entity.id, input.centerEntityId), eq(entity.graphId, input.graphId)))
     .limit(1)
 
   const center = centerRows[0]
@@ -258,7 +262,10 @@ export async function buildGraphDeltaFromCenter(input: BuildGraphDeltaInput): Pr
     const relationshipIdRows = await db
       .select({ relationshipId: relationshipParticipant.relationshipId })
       .from(relationshipParticipant)
-      .where(inArray(relationshipParticipant.entityId, frontierList))
+      .innerJoin(relationship, eq(relationshipParticipant.relationshipId, relationship.id))
+      .where(
+        and(inArray(relationshipParticipant.entityId, frontierList), eq(relationship.graphId, input.graphId))
+      )
 
     const candidateRelationshipIds = [...new Set(relationshipIdRows.map((row) => row.relationshipId))].filter(
       (relationshipId) => !processedRelationshipIds.has(relationshipId)
@@ -270,7 +277,7 @@ export async function buildGraphDeltaFromCenter(input: BuildGraphDeltaInput): Pr
     }
 
     candidateRelationshipIds.forEach((relationshipId) => processedRelationshipIds.add(relationshipId))
-    const bundles = await fetchRelationshipBundles(candidateRelationshipIds)
+    const bundles = await fetchRelationshipBundles(input.graphId, candidateRelationshipIds)
 
     const participantEntityIds = [
       ...new Set(bundles.flatMap((bundle) => bundle.participants.map((participant) => participant.entityId)))
@@ -278,7 +285,7 @@ export async function buildGraphDeltaFromCenter(input: BuildGraphDeltaInput): Pr
 
     const missingEntityIds = participantEntityIds.filter((entityId) => !entityCache.has(entityId))
     if (missingEntityIds.length > 0) {
-      const fetchedEntities = await fetchEntitiesByIds(missingEntityIds)
+      const fetchedEntities = await fetchEntitiesByIds(input.graphId, missingEntityIds)
       fetchedEntities.forEach((row, id) => entityCache.set(id, row))
     }
 

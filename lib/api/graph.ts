@@ -12,6 +12,7 @@ type AlreadyLoaded = {
 }
 
 type GraphViewRequest = {
+  graph_id: string
   center_entity_id: string
   as_of: string
   depth: number
@@ -20,6 +21,7 @@ type GraphViewRequest = {
 }
 
 type GraphExpandRequest = {
+  graph_id: string
   entity_id: string
   as_of: string
   depth: number
@@ -57,9 +59,15 @@ async function postJson<TRequest extends object, TResponse>(
 }
 
 export async function fetchGraphView(input: GraphViewRequest): Promise<GraphResponse> {
-  return postJson<GraphViewRequest, GraphResponse>("/api/v1/graph/view", input)
+  return postJson<GraphViewRequest, GraphResponse>(
+    `/api/v1/graphs/${input.graph_id}/graph/view`,
+    input
+  )
 }
 
 export async function fetchGraphExpand(input: GraphExpandRequest): Promise<GraphResponse> {
-  return postJson<GraphExpandRequest, GraphResponse>("/api/v1/graph/expand", input)
+  return postJson<GraphExpandRequest, GraphResponse>(
+    `/api/v1/graphs/${input.graph_id}/graph/expand`,
+    input
+  )
 }

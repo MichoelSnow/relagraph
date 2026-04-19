@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto"
 
-import { eq } from "drizzle-orm"
+import { and, eq, inArray } from "drizzle-orm"
 import { NextResponse } from "next/server"
 
 import { getDb } from "@/db/client"
-import { relationship, relationshipParticipant, relationshipType } from "@/db/schema"
+import { entity, relationship, relationshipParticipant, relationshipType } from "@/db/schema"
+import { requireApiGraphAccess } from "@/server/api/auth"
 import { isJsonRequest, jsonError } from "@/server/api/http"
 import type { RelationshipParticipant } from "@/types"
 
@@ -16,7 +17,17 @@ type CreateRelationshipRequest = {
   }>
 }
 
-export async function POST(request: Request): Promise<NextResponse> {
+type RouteContext = {
+  params: Promise<{ graphId: string }>
+}
+
+export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
+  const { graphId } = await context.params
+  const auth = await requireApiGraphAccess(graphId)
+  if (!auth.user) {
+    return auth.response
+  }
+
   if (!isJsonRequest(request)) {
     return jsonError(415, "unsupported_media_type", "Content-Type must be application/json")
   }
@@ -69,11 +80,31 @@ export async function POST(request: Request): Promise<NextResponse> {
     )
   }
 
+  const participantEntityIds = [...new Set(participantInputs.map((participant) => participant.entityId))]
+  const existingEntities = await db
+    .select({ id: entity.id })
+    .from(entity)
+    .where(inArray(entity.id, participantEntityIds))
+
+  if (existingEntities.length !== participantEntityIds.length) {
+    return jsonError(400, "invalid_participants", "All participants must reference existing entities")
+  }
+
+  const graphScopedEntities = await db
+    .select({ id: entity.id })
+    .from(entity)
+    .where(and(inArray(entity.id, participantEntityIds), eq(entity.graphId, graphId)))
+
+  if (graphScopedEntities.length !== participantEntityIds.length) {
+    return jsonError(400, "invalid_participants", "Participants must belong to the selected graph")
+  }
+
   const relationshipId = randomUUID()
 
   await db.transaction(async (tx) => {
     await tx.insert(relationship).values({
       id: relationshipId,
+      graphId,
       relationshipTypeId: typeRecord.id
     })
 

@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto"
 
+import { asc, eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 
 import { getDb } from "@/db/client"
 import { entity } from "@/db/schema"
+import { requireApiGraphAccess } from "@/server/api/auth"
 import { isJsonRequest, jsonError } from "@/server/api/http"
 import type { Entity } from "@/types"
 
@@ -12,7 +14,38 @@ type CreateEntityRequest = {
   display_name?: string
 }
 
-export async function POST(request: Request): Promise<NextResponse> {
+type RouteContext = {
+  params: Promise<{ graphId: string }>
+}
+
+export async function GET(_: Request, context: RouteContext): Promise<NextResponse> {
+  const { graphId } = await context.params
+  const auth = await requireApiGraphAccess(graphId)
+  if (!auth.user) {
+    return auth.response
+  }
+
+  const db = getDb()
+  const entities = await db
+    .select({
+      id: entity.id,
+      entity_kind: entity.entityKind,
+      display_name: entity.canonicalDisplayName
+    })
+    .from(entity)
+    .where(eq(entity.graphId, graphId))
+    .orderBy(asc(entity.canonicalDisplayName))
+
+  return NextResponse.json({ entities })
+}
+
+export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
+  const { graphId } = await context.params
+  const auth = await requireApiGraphAccess(graphId)
+  if (!auth.user) {
+    return auth.response
+  }
+
   if (!isJsonRequest(request)) {
     return jsonError(415, "unsupported_media_type", "Content-Type must be application/json")
   }
@@ -34,6 +67,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   await db.insert(entity).values({
     id,
+    graphId,
     entityKind: body.entity_kind,
     canonicalDisplayName: displayName
   })

@@ -10,6 +10,7 @@ import SidePanel from "./SidePanel"
 import TimeSlider from "./TimeSlider"
 
 type GraphExplorerProps = {
+  graphId: string
   entityId: string
   initialAsOf: string
 }
@@ -55,7 +56,7 @@ function mergeGraphState(previous: GraphState, delta: GraphState): GraphState {
   }
 }
 
-export default function GraphExplorer({ entityId, initialAsOf }: GraphExplorerProps) {
+export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphExplorerProps) {
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null)
   const [expandedState, setExpandedState] = useState<{
     scopeKey: string
@@ -74,11 +75,12 @@ export default function GraphExplorer({ entityId, initialAsOf }: GraphExplorerPr
     }
   })
 
-  const scopeKey = `${entityId}|${uiState.asOf}|${uiState.depth}|${uiState.filters.entityTypes.join(",")}|${uiState.filters.relationshipTypes.join(",")}|${uiState.filters.includeInactive}`
+  const scopeKey = `${graphId}|${entityId}|${uiState.asOf}|${uiState.depth}|${uiState.filters.entityTypes.join(",")}|${uiState.filters.relationshipTypes.join(",")}|${uiState.filters.includeInactive}`
 
   const viewQuery = useQuery({
     queryKey: [
       "graph:view",
+      graphId,
       entityId,
       uiState.asOf,
       uiState.depth,
@@ -89,6 +91,7 @@ export default function GraphExplorer({ entityId, initialAsOf }: GraphExplorerPr
     enabled: entityId.length > 0,
     queryFn: async () =>
       fetchGraphView({
+        graph_id: graphId,
         center_entity_id: entityId,
         as_of: uiState.asOf,
         depth: uiState.depth,
@@ -115,6 +118,7 @@ export default function GraphExplorer({ entityId, initialAsOf }: GraphExplorerPr
   const expandMutation = useMutation({
     mutationFn: async (targetEntityId: string) =>
       fetchGraphExpand({
+        graph_id: graphId,
         entity_id: targetEntityId,
         as_of: uiState.asOf,
         depth: uiState.depth,
@@ -151,7 +155,7 @@ export default function GraphExplorer({ entityId, initialAsOf }: GraphExplorerPr
     null
 
   return (
-    <main className="mx-auto grid min-h-screen w-full max-w-7xl gap-4 p-4 lg:grid-cols-[1fr_280px]">
+    <section className="grid w-full gap-4 lg:grid-cols-[1fr_280px]">
       <section className="space-y-4">
         <header className="rounded-md border border-slate-300 bg-white p-3">
           <h1 className="text-base font-semibold text-slate-900">Graph Explorer</h1>
@@ -190,6 +194,6 @@ export default function GraphExplorer({ entityId, initialAsOf }: GraphExplorerPr
         nodeCount={entities.length}
         edgeCount={edges.length}
       />
-    </main>
+    </section>
   )
 }
