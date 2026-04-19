@@ -130,20 +130,20 @@ Phase gate:
 References: `docs/frontend_architecture.md`, `docs/ui_framework.md`, `docs/api_spec.md`
 
 Page and components:
-- [ ] Create `/graph/[entityId]` route.
-- [ ] Implement `GraphCanvas` (Cytoscape).
-- [ ] Implement `SidePanel` placeholder.
-- [ ] Implement basic `TimeSlider`.
+- [x] Create `/graph/[entityId]` route.
+- [x] Implement `GraphCanvas` (Cytoscape).
+- [x] Implement `SidePanel` placeholder.
+- [x] Implement basic `TimeSlider`.
 
 Behavior:
-- [ ] On load, call `/api/v1/graph/view` via TanStack Query.
-- [ ] Render nodes + edges from `GraphResponse`.
-- [ ] On node click, call `/api/v1/graph/expand`.
-- [ ] Merge returned delta into deduplicated client graph state.
-- [ ] Keep filtering/time/traversal logic on backend.
+- [x] On load, call `/api/v1/graph/view` via TanStack Query.
+- [x] Render nodes + edges from `GraphResponse`.
+- [x] On node click, call `/api/v1/graph/expand`.
+- [x] Merge returned delta into deduplicated client graph state.
+- [x] Keep filtering/time/traversal logic on backend.
 
 Phase gate:
-- [ ] Graph route loads, renders initial graph, and supports node expansion.
+- [x] Graph route loads, renders initial graph, and supports node expansion.
 
 ---
 

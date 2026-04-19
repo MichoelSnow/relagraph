@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Providers from "./providers"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -13,7 +14,9 @@ type RootLayoutProps = {
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   )
 }
