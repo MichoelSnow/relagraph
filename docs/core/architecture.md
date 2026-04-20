@@ -22,19 +22,25 @@ All code must be organized into these layers:
 
 Each project must map the logical layers to its folder structure.
 
-Examples:
+### Interface Layer
+- app/** (Next.js routes/pages and HTTP route handlers under app/api/**)
+- components/** (rendering and interaction UI: auth, graph, ui primitives)
 
-Frontend (React):
-- Interface → /pages
-- Shared → /components
-- Application → /features
-- Shared utilities → /lib
+### Application Layer
+- lib/api/** (client-side API orchestration for UI workflows)
+- server/api/** (request orchestration, auth/session-aware endpoint composition)
+- server/graph/projection.ts (application-level graph view assembly workflow)
 
-Backend (Python API):
-- Interface → /api
-- Application → /services
-- Domain → /domain
-- Shared → /utils
+### Domain Layer
+- types/canonical.ts (core graph DTO contract)
+- docs/graph_projection_contract.md, docs/canonical_dtos.md, docs/relationship_graph_schema.md (domain rules/spec source)
+- Domain invariants currently live partly in API/projection modules rather than a dedicated domain/ folder
+
+### Shared Layer
+- lib/ui/** (styles.ts, cx.ts reusable presentation utilities)
+- lib/env.ts and cross-cutting helpers
+- types/index.ts (shared type exports)
+- db/schema.ts, db/client.ts (shared persistence primitives used by app/server code)
 
 ---
 

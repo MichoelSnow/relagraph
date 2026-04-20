@@ -9,7 +9,7 @@ These rules override default agent behavior.
 
 ## Control Files
 
-All control files are located in:
+All control files, except for this one, are located in:
 
 /docs/core/
 

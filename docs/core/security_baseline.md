@@ -20,7 +20,7 @@ Security is NOT optional. All code must comply with these rules.
 ## 1. Authentication & Authorization
 
 - Use established authentication libraries (do NOT build auth from scratch)
-- Store passwords using strong hashing (bcrypt or Argon2) with salting
+- Store passwords using strong hashing (bcrypt, Argon2, or scrypt) with salting
 - Implement secure session management (expiration, rotation, invalidation)
 - Use JWTs only with proper expiration and validation
 - Enforce authentication on ALL protected endpoints

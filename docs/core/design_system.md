@@ -210,6 +210,19 @@ Use:
 
 ---
 
+## UI Review Requirement
+
+Before finalizing any UI:
+
+- Review for:
+  - unnecessary data exposure
+  - layout issues
+  - information overload
+
+- If any are present → refactor before completion
+
+---
+
 ## Anti-Patterns (Do NOT do)
 
 - Full-width forms and inputs
