@@ -155,7 +155,7 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
 
       <Section title="Canvas">
         <Stack>
-          {errorMessage ? <p className="text-sm text-red-700">{errorMessage}</p> : null}
+          {errorMessage ? <p className="text-sm text-[var(--console-danger-text)]">{errorMessage}</p> : null}
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
             <GraphCanvas
               entities={entities}

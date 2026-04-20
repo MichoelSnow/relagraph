@@ -8,5 +8,10 @@ type SectionHeaderProps = HTMLAttributes<HTMLHeadingElement> & {
 
 export default function SectionHeader({ as = "h2", className, ...props }: SectionHeaderProps) {
   const Component = as
-  return <Component className={cx("text-sm font-semibold tracking-tight text-slate-900", className)} {...props} />
+  return (
+    <Component
+      className={cx("text-sm font-semibold tracking-tight text-[var(--console-text-strong)]", className)}
+      {...props}
+    />
+  )
 }

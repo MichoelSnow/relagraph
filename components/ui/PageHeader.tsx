@@ -14,8 +14,8 @@ export default function PageHeader({ title, description, action, className }: Pa
     <header className={cx("mb-6", className)}>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">{title}</h1>
-          {description ? <p className="mt-1 text-sm text-slate-600">{description}</p> : null}
+          <h1 className="text-2xl font-semibold text-[var(--console-text-strong)]">{title}</h1>
+          {description ? <p className="mt-1 text-sm text-[var(--console-text-dim)]">{description}</p> : null}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>

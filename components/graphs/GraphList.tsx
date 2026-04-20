@@ -72,7 +72,7 @@ export default function GraphList() {
           <form onSubmit={onSubmit}>
             <Stack className="gap-3">
               <label className="block">
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">New graph name</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">New graph name</span>
                 <Input
                   value={name}
                   onChange={(event) => setName(event.target.value)}
@@ -103,7 +103,7 @@ export default function GraphList() {
             <Badge>{graphs.length} total</Badge>
           </div>
           {graphsQuery.isLoading ? (
-            <Card variant="subpanel" className="p-3 text-sm text-slate-500">
+            <Card variant="subpanel" className="p-3 text-sm text-[var(--console-text-dim)]">
               Loading your graphs...
             </Card>
           ) : null}
@@ -113,7 +113,7 @@ export default function GraphList() {
             </Card>
           ) : null}
           {graphs.length === 0 && !graphsQuery.isLoading ? (
-            <Card variant="subpanel" className="border-dashed p-5 text-sm text-slate-500">
+            <Card variant="subpanel" className="border-dashed p-5 text-sm text-[var(--console-text-dim)]">
               No graphs yet. Create your first graph above to get started.
             </Card>
           ) : null}
@@ -122,10 +122,10 @@ export default function GraphList() {
               <li key={graph.id}>
                 <Link
                   href={`/graphs/${graph.id}`}
-                  className="block rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 transition-colors hover:bg-slate-100"
+                  className="block rounded-lg border border-[var(--console-border)] bg-[var(--console-subpanel)] px-4 py-3 text-[var(--console-text)] transition-colors hover:bg-[var(--console-panel-muted)]"
                 >
-                  <p className="truncate font-semibold">{graph.name}</p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="truncate font-semibold text-[var(--console-text-strong)]">{graph.name}</p>
+                  <p className="mt-1 text-xs text-[var(--console-text-muted)]">
                     Open graph workspace
                   </p>
                 </Link>

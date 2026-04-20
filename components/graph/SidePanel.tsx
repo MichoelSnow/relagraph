@@ -12,8 +12,8 @@ type SidePanelProps = {
 
 export default function SidePanel({ selectedEntityId, nodeCount, edgeCount }: SidePanelProps) {
   return (
-    <Card as="aside" className="fade-in p-4 shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
-      <SectionHeader className="text-[#6fe8ff]">Inspector</SectionHeader>
+    <Card as="aside" className="fade-in p-4 shadow-[var(--console-shadow-strong)]">
+      <SectionHeader className="text-[var(--console-primary)]">Inspector</SectionHeader>
       <p className="mt-1 text-xs text-[var(--console-text-dim)]">
         Click a node to select it and expand nearby connections.
       </p>

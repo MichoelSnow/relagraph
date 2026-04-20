@@ -4,7 +4,7 @@ import cytoscape, { type ElementDefinition } from "cytoscape"
 import { useEffect, useMemo, useRef } from "react"
 
 import type { Edge, Entity } from "@/types"
-import { graphTheme } from "@/lib/ui/graphTheme"
+import { graphTheme, resolveGraphTheme } from "@/lib/ui/graphTheme"
 
 type GraphCanvasProps = {
   entities: Entity[]
@@ -54,6 +54,8 @@ export default function GraphCanvas({
       return
     }
 
+    const resolvedTheme = resolveGraphTheme(containerRef.current)
+
     const cy = cytoscape({
       container: containerRef.current,
       elements,
@@ -61,34 +63,34 @@ export default function GraphCanvas({
         {
           selector: "node[entityKind = 'person']",
           style: {
-            "background-color": graphTheme.node.person
+            "background-color": resolvedTheme.node.person
           }
         },
         {
           selector: "node[entityKind = 'animal']",
           style: {
-            "background-color": graphTheme.node.animal
+            "background-color": resolvedTheme.node.animal
           }
         },
         {
           selector: "node[entityKind = 'place']",
           style: {
-            "background-color": graphTheme.node.place
+            "background-color": resolvedTheme.node.place
           }
         },
         {
           selector: "node",
           style: {
             label: "data(label)",
-            color: graphTheme.node.text,
+            color: resolvedTheme.node.text,
             "text-valign": "bottom",
             "text-margin-y": 8,
             "font-size": 12,
             width: 26,
             height: 26,
             "border-width": 1.5,
-            "border-color": graphTheme.node.border,
-            "text-background-color": graphTheme.node.textBg,
+            "border-color": resolvedTheme.node.border,
+            "text-background-color": resolvedTheme.node.textBg,
             "text-background-opacity": 1,
             "text-background-padding": "3px",
             "text-background-shape": "roundrectangle"
@@ -98,7 +100,7 @@ export default function GraphCanvas({
           selector: 'node[isSelected = "true"]',
           style: {
             "border-width": 5,
-            "border-color": graphTheme.node.selectedBorder
+            "border-color": resolvedTheme.node.selectedBorder
           }
         },
         {
@@ -106,13 +108,13 @@ export default function GraphCanvas({
           style: {
             width: 2,
             label: "data(relationshipType)",
-            color: graphTheme.edge.text,
+            color: resolvedTheme.edge.text,
             "font-size": 10,
-            "text-background-color": graphTheme.edge.textBg,
+            "text-background-color": resolvedTheme.edge.textBg,
             "text-background-opacity": 1,
             "text-background-padding": "2px",
-            "line-color": graphTheme.edge.line,
-            "target-arrow-color": graphTheme.edge.line,
+            "line-color": resolvedTheme.edge.line,
+            "target-arrow-color": resolvedTheme.edge.line,
             "target-arrow-shape": "triangle",
             "curve-style": "bezier"
           }
@@ -153,7 +155,7 @@ export default function GraphCanvas({
   return (
     <div
       ref={containerRef}
-      className="h-[68vh] min-h-[520px] w-full rounded-xl border border-[var(--console-border)]"
+      className="h-[68vh] min-h-[520px] w-full rounded-xl border border-[var(--graph-canvas-border)]"
       style={{
         background: `linear-gradient(135deg, ${graphTheme.canvas.bgFrom}, ${graphTheme.canvas.bgTo})`
       }}

@@ -73,7 +73,7 @@ export default function AuthForm() {
 
         <Section title="Authentication">
           <Stack>
-            <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <div className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--console-border)] bg-[var(--console-subpanel)] p-1">
               <Button
                 type="button"
                 size="md"
@@ -97,7 +97,7 @@ export default function AuthForm() {
             <form onSubmit={onSubmit}>
               <Stack>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Username</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Username</span>
                   <Input
                     type="text"
                     value={username}
@@ -108,7 +108,7 @@ export default function AuthForm() {
                 </label>
 
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Password</span>
+                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Password</span>
                   <div className="relative">
                     <Input
                       type={showPassword ? "text" : "password"}
@@ -122,7 +122,7 @@ export default function AuthForm() {
                       type="button"
                       aria-label={showPassword ? "Hide password" : "Show password"}
                       onClick={() => setShowPassword((previous) => !previous)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 hover:text-slate-700"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--console-text-muted)] hover:text-[var(--console-text)]"
                     >
                       {showPassword ? (
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -143,7 +143,7 @@ export default function AuthForm() {
 
                 {mode === "register" ? (
                   <label className="block">
-                    <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Confirm password</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Confirm password</span>
                     <div className="relative">
                       <Input
                         type={showConfirmPassword ? "text" : "password"}
@@ -157,7 +157,7 @@ export default function AuthForm() {
                         type="button"
                         aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
                         onClick={() => setShowConfirmPassword((previous) => !previous)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 hover:text-slate-700"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--console-text-muted)] hover:text-[var(--console-text)]"
                       >
                         {showConfirmPassword ? (
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">

@@ -84,7 +84,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
             </Button>
             <Link
               href="/graphs"
-              className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-[var(--console-border)] bg-[var(--console-panel)] px-4 py-2.5 text-sm font-medium text-[var(--console-text)] transition-colors hover:bg-[var(--console-panel-muted)]"
             >
               Back to graphs
             </Link>
@@ -98,7 +98,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
             <Badge>{entities.length} entities</Badge>
             <FormContainer>
               <label className="block">
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Focus entity</span>
+                <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Focus entity</span>
                 <Select
                   value={selectedEntityId ?? ""}
                   onChange={(event) => setSelectedOverride(event.target.value || null)}
@@ -120,7 +120,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
               <form onSubmit={onCreateEntity}>
                 <Stack className="gap-3">
                   <label className="block">
-                    <span className="text-xs font-medium uppercase tracking-wide text-slate-500">New entity name</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">New entity name</span>
                     <Input
                       value={newEntityName}
                       onChange={(event) => setNewEntityName(event.target.value)}
@@ -128,7 +128,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
                     />
                   </label>
                   <label className="block">
-                    <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Entity type</span>
+                    <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Entity type</span>
                     <Select
                       value={newEntityKind}
                       onChange={(event) => setNewEntityKind(event.target.value as "person" | "animal" | "place")}
@@ -161,7 +161,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
         {selectedEntityId ? (
           <GraphExplorer graphId={graphId} entityId={selectedEntityId} initialAsOf={initialAsOf} />
         ) : (
-          <Card className="border-dashed p-8 text-center text-sm text-slate-500">
+          <Card className="border-dashed p-8 text-center text-sm text-[var(--console-text-dim)]">
             No entities yet. Create your first entity to start this graph.
           </Card>
         )}

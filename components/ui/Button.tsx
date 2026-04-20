@@ -16,15 +16,15 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const base =
-    "inline-flex items-center justify-center whitespace-nowrap rounded-md border text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 focus-visible:ring-offset-2"
+    "inline-flex items-center justify-center whitespace-nowrap rounded-md border text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--console-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--console-bg)]"
   const sizeClass = size === "sm" ? "px-3 py-1.5" : "px-4 py-2.5"
   const widthClass = block ? "w-full text-center" : "w-auto"
   const variantClass =
     variant === "primary"
-      ? "border-slate-900 bg-slate-900 text-white hover:bg-slate-800"
+      ? "border-[var(--console-primary)] bg-[var(--console-primary)] text-[var(--console-bg)] hover:bg-[var(--console-primary-hover)]"
       : variant === "danger"
-        ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-        : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+        ? "border-[var(--console-danger-border)] bg-[var(--console-danger-bg)] text-[var(--console-danger-text)] hover:bg-[var(--console-danger-bg-hover)]"
+        : "border-[var(--console-border)] bg-[var(--console-panel)] text-[var(--console-text)] hover:bg-[var(--console-panel-muted)]"
 
   return (
     <button

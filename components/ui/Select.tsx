@@ -8,7 +8,7 @@ export default function Select({ className, ...props }: SelectProps) {
   return (
     <select
       className={cx(
-        "mt-1.5 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/50",
+        "mt-1.5 w-full rounded-md border border-[var(--console-input-border)] bg-[var(--console-input-bg)] px-3 py-2 text-sm text-[var(--console-input-text)] focus:outline-none focus:ring-2 focus:ring-[var(--console-focus-ring)]",
         className
       )}
       {...props}

@@ -53,7 +53,7 @@ export default function TimeSlider({ asOf, onChange }: TimeSliderProps) {
           const nextAsOf = new Date(startOfToday + nextValue * MS_PER_DAY).toISOString()
           onChange(nextAsOf)
         }}
-        className="mt-2 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[#24324d] accent-[var(--console-accent)]"
+        className="mt-2 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[var(--console-border-strong)] accent-[var(--console-primary)]"
       />
       <p suppressHydrationWarning className="mt-2 text-xs text-[var(--console-text-muted)]">
         {displayDate}

@@ -3,6 +3,58 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: dark;
+  --console-bg: #0b1020;
+  --console-bg-grid: #00000000;
+  --console-panel: #10182b;
+  --console-panel-muted: #131d34;
+  --console-subpanel: #15203a;
+  --console-border: #253556;
+  --console-border-strong: #33466d;
+  --console-text: #dbe7ff;
+  --console-text-strong: #f5f8ff;
+  --console-text-dim: #a9bbdf;
+  --console-text-muted: #8ca2ca;
+  --console-primary: #66a3ff;
+  --console-primary-hover: #84b5ff;
+  --console-focus-ring: #66a3ff80;
+  --console-success: #5fd7a7;
+  --console-danger-border: #6a2b3a;
+  --console-danger-bg: #2a1620;
+  --console-danger-bg-hover: #341b27;
+  --console-danger-text: #ffb5c5;
+  --console-shadow-strong: 0 16px 36px rgba(0, 0, 0, 0.45);
+  --console-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  --console-input-bg: #0f172a;
+  --console-input-border: #33466d;
+  --console-input-text: #e6eeff;
+  --console-input-placeholder: #7f93ba;
+  --console-badge-default-border: #2f4268;
+  --console-badge-default-bg: #15203a;
+  --console-badge-default-text: #9fb4db;
+  --console-badge-accent-border: #33548a;
+  --console-badge-accent-bg: #182744;
+  --console-badge-accent-text: #8ec3ff;
+  --console-badge-success-border: #2d5b4f;
+  --console-badge-success-bg: #132a25;
+  --console-badge-success-text: #84e5be;
+  --graph-node-person: #5aa2ff;
+  --graph-node-animal: #4ed3aa;
+  --graph-node-place: #f1b36c;
+  --graph-node-text: #e7eeff;
+  --graph-node-border: #3a5079;
+  --graph-node-text-bg: rgba(8, 13, 24, 0.85);
+  --graph-node-selected-border: #9ec5ff;
+  --graph-node-hover-overlay: #78adff;
+  --graph-edge-text: #a9bbdf;
+  --graph-edge-line: #4b628f;
+  --graph-edge-text-bg: rgba(8, 13, 24, 0.85);
+  --graph-canvas-border: #2e4268;
+  --graph-canvas-bg-from: #0b1020;
+  --graph-canvas-bg-to: #10182b;
+}
+
+[data-theme="light"] {
   color-scheme: light;
   --console-bg: #f8fafc;
   --console-bg-grid: #ffffff00;
@@ -10,22 +62,48 @@
   --console-panel-muted: #f8fafc;
   --console-subpanel: #f8fafc;
   --console-border: #dbe3ee;
+  --console-border-strong: #c5d0e0;
   --console-text: #0f172a;
   --console-text-strong: #020617;
   --console-text-dim: #475569;
   --console-text-muted: #64748b;
-  --console-accent: #2563eb;
-  --console-accent-soft: #2563eb;
-  --console-accent-soft-hover: #1d4ed8;
   --console-primary: #2563eb;
   --console-primary-hover: #1d4ed8;
-  --console-focus-ring: #93c5fd;
+  --console-focus-ring: #93c5fd80;
   --console-success: #16a34a;
   --console-danger-border: #fecaca;
   --console-danger-bg: #fef2f2;
+  --console-danger-bg-hover: #fee2e2;
   --console-danger-text: #991b1b;
   --console-shadow-strong: 0 12px 28px rgba(15, 23, 42, 0.08);
   --console-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  --console-input-bg: #ffffff;
+  --console-input-border: #cbd5e1;
+  --console-input-text: #0f172a;
+  --console-input-placeholder: #94a3b8;
+  --console-badge-default-border: #cbd5e1;
+  --console-badge-default-bg: #f1f5f9;
+  --console-badge-default-text: #475569;
+  --console-badge-accent-border: #bfdbfe;
+  --console-badge-accent-bg: #eff6ff;
+  --console-badge-accent-text: #1e3a8a;
+  --console-badge-success-border: #bbf7d0;
+  --console-badge-success-bg: #f0fdf4;
+  --console-badge-success-text: #166534;
+  --graph-node-person: #2563eb;
+  --graph-node-animal: #059669;
+  --graph-node-place: #d97706;
+  --graph-node-text: #1f2937;
+  --graph-node-border: #cbd5e1;
+  --graph-node-text-bg: rgba(255, 255, 255, 0.85);
+  --graph-node-selected-border: #1d4ed8;
+  --graph-node-hover-overlay: #93c5fd;
+  --graph-edge-text: #475569;
+  --graph-edge-line: #94a3b8;
+  --graph-edge-text-bg: rgba(255, 255, 255, 0.85);
+  --graph-canvas-border: #dbe3ee;
+  --graph-canvas-bg-from: #ffffff;
+  --graph-canvas-bg-to: #f8fafc;
 }
 
 body {
@@ -48,7 +126,7 @@ body {
 .console-focus {
   outline: none;
   border-color: var(--console-primary);
-  box-shadow: 0 0 0 2px #bfdbfe;
+  box-shadow: 0 0 0 2px var(--console-focus-ring);
 }
 
 .fade-in {

@@ -9,10 +9,10 @@ type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
 export default function Badge({ variant = "default", className, ...props }: BadgeProps) {
   const variantClass =
     variant === "accent"
-      ? "inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-900"
+      ? "inline-flex items-center rounded-full border border-[var(--console-badge-accent-border)] bg-[var(--console-badge-accent-bg)] px-2 py-0.5 text-xs text-[var(--console-badge-accent-text)]"
       : variant === "success"
-        ? "inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-700"
-        : "inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600"
+        ? "inline-flex items-center rounded-full border border-[var(--console-badge-success-border)] bg-[var(--console-badge-success-bg)] px-2 py-0.5 text-xs text-[var(--console-badge-success-text)]"
+        : "inline-flex items-center rounded-full border border-[var(--console-badge-default-border)] bg-[var(--console-badge-default-bg)] px-2 py-0.5 text-xs text-[var(--console-badge-default-text)]"
 
   return <span className={cx(variantClass, className)} {...props} />
 }

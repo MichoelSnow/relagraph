@@ -18,10 +18,10 @@ export default function Card<T extends CardTag = "section">({
   const Component = (as ?? "section") as ElementType
   const variantClass =
     variant === "danger"
-      ? "rounded-lg border border-red-200 bg-red-50 text-red-700 shadow-sm"
+      ? "rounded-lg border border-[var(--console-danger-border)] bg-[var(--console-danger-bg)] text-[var(--console-danger-text)] shadow-sm"
       : variant === "subpanel"
-        ? "rounded-lg border border-slate-200 bg-slate-50 text-slate-700"
-        : "rounded-xl border border-slate-200 bg-white text-slate-900 shadow-sm"
+        ? "rounded-lg border border-[var(--console-border)] bg-[var(--console-subpanel)] text-[var(--console-text-dim)]"
+        : "rounded-xl border border-[var(--console-border)] bg-[var(--console-panel)] text-[var(--console-text)] shadow-sm"
 
   return <Component className={cx(variantClass, className)} {...props} />
 }
