@@ -52,18 +52,16 @@ export default function GraphList() {
   }
 
   return (
-    <main className="console-atmosphere relative min-h-screen overflow-hidden bg-[var(--console-bg)] px-5 py-8 md:px-8 md:py-10">
-      <div className="console-grid pointer-events-none absolute inset-0 opacity-[0.12]" />
-
-      <section className="relative z-10 mx-auto w-full max-w-6xl">
-        <Card as="header" className="fade-in mb-5 p-5 shadow-[var(--console-shadow-strong)]">
+    <main className="min-h-screen bg-[var(--console-bg)] px-5 py-8 md:px-8 md:py-10">
+      <section className="mx-auto w-full max-w-[1200px]">
+        <Card as="header" className="mb-5 p-5">
           <div className="mb-3 flex items-center justify-between border-b border-[var(--console-border)] pb-3">
-            <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#6fe8ff]">Relagraph Console</p>
+            <p className="text-sm font-semibold tracking-tight text-[var(--console-text)]">Relagraph</p>
             <Badge>/graphs</Badge>
           </div>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--console-success)]">Workspace</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Workspace</p>
               <h1 className="mt-1 text-2xl font-semibold text-[var(--console-text-strong)]">Your Graphs</h1>
               <p className="mt-1 text-sm text-[var(--console-text-dim)]">Select an existing graph or create a new one.</p>
             </div>
@@ -79,9 +77,9 @@ export default function GraphList() {
           </div>
         </Card>
 
-        <Card as="form" className="stagger-1 fade-in mb-5 p-5" onSubmit={onSubmit}>
+        <Card as="form" className="mb-5 p-5" onSubmit={onSubmit}>
           <label className="block">
-            <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--console-text-muted)]">New graph name</span>
+            <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">New graph name</span>
             <Input
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -93,7 +91,7 @@ export default function GraphList() {
             type="submit"
             disabled={createGraphMutation.isPending}
             variant="primary"
-            className="mt-3 tracking-[0.14em]"
+            className="mt-3"
           >
             {createGraphMutation.isPending ? "Creating..." : "Create graph"}
           </Button>
@@ -104,7 +102,7 @@ export default function GraphList() {
           ) : null}
         </Card>
 
-        <Card className="stagger-2 fade-in p-5">
+        <Card className="p-5">
           <div className="mb-3 flex items-center justify-between">
             <SectionHeader>Existing graphs</SectionHeader>
             <Badge>{graphs.length} total</Badge>
@@ -129,10 +127,10 @@ export default function GraphList() {
               <li key={graph.id}>
                 <Link
                   href={`/graphs/${graph.id}`}
-                  className="block rounded-xl border border-[var(--console-border)] bg-[var(--console-panel-muted)] px-4 py-3 text-[var(--console-text)] transition hover:-translate-y-0.5 hover:border-[var(--console-accent)] hover:bg-[#0f1f35]"
+                  className="block rounded-lg border border-[var(--console-border)] bg-[var(--console-subpanel)] px-4 py-3 text-[var(--console-text)] transition-colors hover:bg-[#f8fafc]"
                 >
                   <p className="truncate font-semibold text-[var(--console-text-strong)]">{graph.name}</p>
-                  <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.12em] text-[var(--console-text-muted)]">
+                  <p className="mt-1 text-xs text-[var(--console-text-muted)]">
                     Open graph workspace
                   </p>
                 </Link>

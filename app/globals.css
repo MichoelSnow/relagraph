@@ -4,25 +4,28 @@
 
 :root {
   color-scheme: light;
-  --console-bg: #090d16;
-  --console-bg-grid: #ffffff33;
-  --console-panel: #0f1524;
-  --console-panel-muted: #111a2c;
-  --console-subpanel: #0b1120;
-  --console-border: #2a3347;
-  --console-text: #d7deef;
-  --console-text-strong: #f5f8ff;
-  --console-text-dim: #98a7c3;
-  --console-text-muted: #8ea1c6;
-  --console-accent: #00f3ff;
-  --console-accent-soft: #07222b;
-  --console-accent-soft-hover: #09303b;
-  --console-success: #15ff83;
-  --console-danger-border: #803044;
-  --console-danger-bg: #321725;
-  --console-danger-text: #ffadc2;
-  --console-shadow-strong: 0 24px 60px rgba(0, 0, 0, 0.55);
-  --console-shadow: 0 16px 34px rgba(0, 0, 0, 0.45);
+  --console-bg: #f8fafc;
+  --console-bg-grid: #ffffff00;
+  --console-panel: #ffffff;
+  --console-panel-muted: #f8fafc;
+  --console-subpanel: #f8fafc;
+  --console-border: #dbe3ee;
+  --console-text: #0f172a;
+  --console-text-strong: #020617;
+  --console-text-dim: #475569;
+  --console-text-muted: #64748b;
+  --console-accent: #2563eb;
+  --console-accent-soft: #2563eb;
+  --console-accent-soft-hover: #1d4ed8;
+  --console-primary: #2563eb;
+  --console-primary-hover: #1d4ed8;
+  --console-focus-ring: #93c5fd;
+  --console-success: #16a34a;
+  --console-danger-border: #fecaca;
+  --console-danger-bg: #fef2f2;
+  --console-danger-text: #991b1b;
+  --console-shadow-strong: 0 12px 28px rgba(15, 23, 42, 0.08);
+  --console-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
 }
 
 body {
@@ -42,33 +45,10 @@ body {
   min-height: 100vh;
 }
 
-.console-atmosphere {
-  background:
-    radial-gradient(circle at 15% 10%, rgba(0, 243, 255, 0.12), transparent 35%),
-    radial-gradient(circle at 80% 90%, rgba(21, 255, 131, 0.1), transparent 36%),
-    linear-gradient(180deg, var(--console-bg), var(--console-bg));
-}
-
-.console-grid {
-  background:
-    repeating-linear-gradient(
-      0deg,
-      transparent 0px,
-      transparent 30px,
-      var(--console-bg-grid) 31px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent 0px,
-      transparent 30px,
-      var(--console-bg-grid) 31px
-    );
-}
-
 .console-focus {
   outline: none;
-  border-color: var(--console-accent);
-  box-shadow: 0 0 0 2px #00f3ff33;
+  border-color: var(--console-primary);
+  box-shadow: 0 0 0 2px #bfdbfe;
 }
 
 .fade-in {

@@ -8,21 +8,21 @@ type CardVariant = "panel" | "subpanel" | "danger"
 type BadgeVariant = "default" | "accent" | "success"
 
 export function pageShellStyles(className?: string): string {
-  return cx("relative min-h-screen overflow-hidden bg-[var(--console-bg)]", className)
+  return cx("min-h-screen bg-[var(--console-bg)]", className)
 }
 
 export function panelStyles(className?: string): string {
-  return cx("relative z-10 mx-auto w-full max-w-7xl px-5 py-8 md:px-8 md:py-10", className)
+  return cx("mx-auto w-full max-w-[1200px] px-5 py-8 md:px-8 md:py-10", className)
 }
 
 export function cardStyles(variant: CardVariant = "panel", className?: string): string {
   const map: Record<CardVariant, string> = {
     panel:
-      "rounded-2xl border border-[var(--console-border)] bg-[var(--console-panel)] text-[var(--console-text)] shadow-[var(--console-shadow)]",
+      "rounded-xl border border-[var(--console-border)] bg-[var(--console-panel)] text-[var(--console-text)] shadow-sm",
     subpanel:
-      "rounded-xl border border-[var(--console-border)] bg-[var(--console-subpanel)] text-[var(--console-text)]",
+      "rounded-lg border border-[var(--console-border)] bg-[var(--console-subpanel)] text-[var(--console-text)]",
     danger:
-      "rounded-lg border border-[var(--console-danger-border)] bg-[var(--console-danger-bg)] text-[var(--console-danger-text)]"
+      "rounded-lg border border-[var(--console-danger-border)] bg-[var(--console-danger-bg)] text-[var(--console-danger-text)] shadow-sm"
   }
 
   return cx(map[variant], className)
@@ -39,16 +39,16 @@ export function buttonStyles(options?: {
   const block = options?.block ?? false
 
   const base =
-    "rounded-lg border font-mono text-xs uppercase tracking-[0.12em] transition disabled:cursor-not-allowed disabled:opacity-50"
+    "inline-flex items-center justify-center whitespace-nowrap rounded-md border text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--console-focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--console-bg)]"
   const sizeClass = size === "sm" ? "px-3 py-1.5" : "px-4 py-2.5"
   const widthClass = block ? "w-full text-center" : "w-auto"
   const variantClass: Record<ButtonVariant, string> = {
     primary:
-      "border-[var(--console-accent)] bg-[var(--console-accent-soft)] text-[#6fe8ff] hover:bg-[var(--console-accent-soft-hover)]",
+      "border-[var(--console-primary)] bg-[var(--console-primary)] text-white hover:bg-[var(--console-primary-hover)]",
     ghost:
-      "border-[var(--console-border)] bg-[var(--console-panel-muted)] text-[var(--console-text)] hover:border-[var(--console-accent)] hover:text-[#6fe8ff]",
+      "border-[var(--console-border)] bg-white text-[var(--console-text)] hover:bg-[var(--console-subpanel)]",
     danger:
-      "border-[var(--console-danger-border)] bg-[var(--console-danger-bg)] text-[var(--console-danger-text)] hover:brightness-110"
+      "border-[var(--console-danger-border)] bg-[var(--console-danger-bg)] text-[var(--console-danger-text)] hover:bg-[#fef2f2]"
   }
 
   return cx(base, sizeClass, widthClass, variantClass[variant], options?.className)
@@ -56,7 +56,7 @@ export function buttonStyles(options?: {
 
 export function inputStyles(className?: string): string {
   return cx(
-    "mt-1.5 w-full rounded-lg border border-[var(--console-border)] bg-[var(--console-panel-muted)] px-3 py-2.5 text-sm text-[#e7eeff] placeholder:text-[#6f7f9f] focus:console-focus",
+    "mt-1.5 w-full rounded-md border border-[var(--console-border)] bg-white px-3 py-2 text-sm text-[var(--console-text)] placeholder:text-[var(--console-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--console-focus-ring)]",
     className
   )
 }
@@ -64,39 +64,39 @@ export function inputStyles(className?: string): string {
 export function badgeStyles(variant: BadgeVariant = "default", className?: string): string {
   const map: Record<BadgeVariant, string> = {
     default:
-      "rounded border border-[var(--console-border)] bg-[var(--console-panel-muted)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--console-text-muted)]",
+      "inline-flex items-center rounded-full border border-[var(--console-border)] bg-[var(--console-subpanel)] px-2 py-0.5 text-xs text-[var(--console-text-muted)]",
     accent:
-      "rounded border border-[var(--console-accent)] bg-[#08222b] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[#6fe8ff]",
+      "inline-flex items-center rounded-full border border-[#bfdbfe] bg-[#eff6ff] px-2 py-0.5 text-xs text-[#1e3a8a]",
     success:
-      "rounded border border-[var(--console-border)] bg-[var(--console-panel-muted)] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em] text-[var(--console-success)]"
+      "inline-flex items-center rounded-full border border-[#bbf7d0] bg-[#f0fdf4] px-2 py-0.5 text-xs text-[#166534]"
   }
 
   return cx(map[variant], className)
 }
 
 export function sectionTitleStyles(className?: string): string {
-  return cx("font-mono text-xs uppercase tracking-[0.16em] text-[var(--console-text-muted)]", className)
+  return cx("text-sm font-semibold tracking-tight text-[var(--console-text)]", className)
 }
 
 export const graphTheme = {
   node: {
-    person: "#00f3ff",
-    animal: "#15ff83",
-    place: "#ffb14a",
-    text: "#d7deef",
-    border: "#0b1120",
-    textBg: "#0f1524d9",
-    selectedBorder: "#ff4fd8",
-    hoverOverlay: "#00f3ff"
+    person: "#2563eb",
+    animal: "#059669",
+    place: "#d97706",
+    text: "#1f2937",
+    border: "#cbd5e1",
+    textBg: "#ffffffd9",
+    selectedBorder: "#1d4ed8",
+    hoverOverlay: "#93c5fd"
   },
   edge: {
-    text: "#8ea1c6",
-    line: "#4a5d81",
-    textBg: "#0f1524d9"
+    text: "#475569",
+    line: "#94a3b8",
+    textBg: "#ffffffd9"
   },
   canvas: {
-    border: "#2a3347",
-    bgFrom: "#0a1222",
-    bgTo: "#0e1a30"
+    border: "#dbe3ee",
+    bgFrom: "#ffffff",
+    bgTo: "#f8fafc"
   }
 }

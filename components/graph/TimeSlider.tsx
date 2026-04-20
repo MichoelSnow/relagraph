@@ -18,6 +18,9 @@ export default function TimeSlider({ asOf, onChange }: TimeSliderProps) {
   }, [])
 
   const value = Math.round((Date.parse(asOf) - startOfToday) / MS_PER_DAY)
+  const displayDate = Number.isNaN(Date.parse(asOf))
+    ? "Invalid date"
+    : new Date(asOf).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
 
   return (
     <div className="rounded-lg border border-[var(--console-border)] bg-[var(--console-subpanel)] px-3 py-2">
@@ -52,8 +55,8 @@ export default function TimeSlider({ asOf, onChange }: TimeSliderProps) {
         }}
         className="mt-2 h-1.5 w-full cursor-pointer appearance-none rounded-full bg-[#24324d] accent-[var(--console-accent)]"
       />
-      <p suppressHydrationWarning className="mt-2 font-mono text-[11px] uppercase tracking-[0.1em] text-[var(--console-text-muted)]">
-        {new Date(asOf).toISOString()}
+      <p suppressHydrationWarning className="mt-2 text-xs text-[var(--console-text-muted)]">
+        {displayDate}
       </p>
     </div>
   )

@@ -1,10 +1,10 @@
-import { and, eq } from "drizzle-orm"
 import { notFound } from "next/navigation"
 
 import GraphWorkspace from "@/components/graph/GraphWorkspace"
-import { getDb } from "@/db/client"
-import { userGraph } from "@/db/schema"
+import { getOwnedGraphSummary } from "@/server/api/graphs"
 import { requireAuthUser } from "@/server/auth/session"
+
+export const dynamic = "force-dynamic"
 
 type GraphPageProps = {
   params: Promise<{ graphId: string }>
@@ -13,18 +13,7 @@ type GraphPageProps = {
 export default async function GraphPage({ params }: GraphPageProps) {
   const { graphId } = await params
   const user = await requireAuthUser()
-  const db = getDb()
-
-  const rows = await db
-    .select({
-      id: userGraph.id,
-      name: userGraph.name
-    })
-    .from(userGraph)
-    .where(and(eq(userGraph.id, graphId), eq(userGraph.ownerUserId, user.id)))
-    .limit(1)
-
-  const graph = rows[0]
+  const graph = await getOwnedGraphSummary(graphId, user.id)
   if (!graph) {
     notFound()
   }

@@ -26,6 +26,8 @@ You MUST read and follow all files in this directory before making any changes.
 - security_baseline.md → security constraints
 - project_bootstrap.md → required project setup
 - docs_policy.md → documentation rules
+- ui_scaffold.md → required UI composition primitives
+- ui_patterns.md → required page structure patterns
 
 ---
 
@@ -63,7 +65,22 @@ You MUST read and follow all files in this directory before making any changes.
 
 ---
 
-## 4. Testing Enforcement
+## 4. UI Enforcement    
+
+- All UI MUST be built using ui_scaffold.md primitives
+- All pages MUST follow a pattern defined in ui_patterns.md
+- All UI layout must use components from /components/ui
+- Before implementing UI, you MUST:
+  1. Identify the correct page pattern
+  2. State the pattern
+  3. Build strictly according to that pattern
+
+- Do NOT construct layouts using raw divs
+- Do NOT invent new page structures
+
+---
+
+## 5. Testing Enforcement
 
 - Follow testing_rules.md strictly
 - All new logic MUST include tests
@@ -71,7 +88,7 @@ You MUST read and follow all files in this directory before making any changes.
 
 ---
 
-## 5. Security Enforcement
+## 6. Security Enforcement
 
 - Follow security_baseline.md strictly
 - Never introduce insecure patterns
@@ -79,7 +96,7 @@ You MUST read and follow all files in this directory before making any changes.
 
 ---
 
-## 6. Documentation Enforcement
+## 7. Documentation Enforcement
 
 - Follow docs_policy.md strictly
 - Do NOT create unnecessary documentation
@@ -87,21 +104,21 @@ You MUST read and follow all files in this directory before making any changes.
 
 ---
 
-## 7. Project Setup Enforcement
+## 8. Project Setup Enforcement
 
 - Follow project_bootstrap.md
 - If required setup is missing → complete it before feature work
 
 ---
 
-## 8. Session Continuity
+## 9. Session Continuity
 
 - Read session_state.md at the start of every session
 - Update session_state.md at the end of every session
 
 ---
 
-## 9. General Rules
+## 10. General Rules
 
 - Prefer reuse over duplication
 - Prefer clarity over cleverness

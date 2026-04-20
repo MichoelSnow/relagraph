@@ -6,8 +6,9 @@ import { useMemo, useState } from "react"
 import { fetchGraphExpand, fetchGraphView } from "@/lib/api/graph"
 import type { Edge, Entity, GraphResponse } from "@/types"
 import Badge from "@/components/ui/Badge"
-import Card from "@/components/ui/Card"
-import SectionHeader from "@/components/ui/SectionHeader"
+import PageHeader from "@/components/ui/PageHeader"
+import PageLayout from "@/components/ui/PageLayout"
+import Section from "@/components/ui/Section"
 import GraphCanvas from "./GraphCanvas"
 import SidePanel from "./SidePanel"
 import TimeSlider from "./TimeSlider"
@@ -158,37 +159,31 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
     null
 
   return (
-    <section className="grid w-full gap-4 lg:grid-cols-[1fr_280px]">
-      <section className="space-y-4">
-        <Card as="header" className="fade-in p-4 shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <SectionHeader className="text-[#6fe8ff]">Graph Explorer</SectionHeader>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                <Badge>Nodes: {entities.length}</Badge>
-                <Badge>Edges: {edges.length}</Badge>
-                <Badge variant={isLoading ? "accent" : "success"}>{isLoading ? "Syncing..." : "Synced"}</Badge>
-              </div>
-            </div>
+    <PageLayout className="space-y-4">
+      <PageHeader
+        title="Graph Explorer"
+        description="Navigate relationships and expand from selected nodes."
+      />
 
-            <div className="min-w-0 flex-1 lg:max-w-[420px]">
-              <TimeSlider
-                asOf={uiState.asOf}
-                onChange={(nextAsOf) => {
-                  setUiState((previous) => ({ ...previous, asOf: nextAsOf }))
-                }}
-              />
-            </div>
+      <Section title="Controls">
+        <div className="flex flex-wrap items-center gap-3">
+          <Badge>Nodes: {entities.length}</Badge>
+          <Badge>Edges: {edges.length}</Badge>
+          <Badge variant={isLoading ? "accent" : "success"}>{isLoading ? "Syncing..." : "Synced"}</Badge>
+          <div className="w-full max-w-[360px]">
+            <TimeSlider
+              asOf={uiState.asOf}
+              onChange={(nextAsOf) => {
+                setUiState((previous) => ({ ...previous, asOf: nextAsOf }))
+              }}
+            />
           </div>
-        </Card>
+        </div>
+      </Section>
 
-        {errorMessage ? (
-          <Card variant="danger" className="p-3 text-sm">
-            {errorMessage}
-          </Card>
-        ) : null}
-
-        <Card className="p-3 shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
+      <Section title="Canvas">
+        {errorMessage ? <p className="mb-3 text-sm text-[var(--console-danger-text)]">{errorMessage}</p> : null}
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
           <GraphCanvas
             entities={entities}
             edges={edges}
@@ -198,16 +193,15 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
               expandMutation.mutate(clickedEntityId)
             }}
           />
-        </Card>
-      </section>
-
-      <div className="lg:sticky lg:top-4 lg:self-start">
-        <SidePanel
-          selectedEntityId={selectedEntityId}
-          nodeCount={entities.length}
-          edgeCount={edges.length}
-        />
-      </div>
-    </section>
+          <aside className="lg:sticky lg:top-4 lg:self-start">
+            <SidePanel
+              selectedEntityId={selectedEntityId}
+              nodeCount={entities.length}
+              edgeCount={edges.length}
+            />
+          </aside>
+        </div>
+      </Section>
+    </PageLayout>
   )
 }

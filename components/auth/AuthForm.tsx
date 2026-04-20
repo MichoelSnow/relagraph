@@ -58,17 +58,15 @@ export default function AuthForm() {
   }
 
   return (
-    <main className="console-atmosphere relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-10">
-      <div className="console-grid pointer-events-none absolute inset-0 opacity-[0.14]" />
-
-      <Card className="fade-in relative z-10 w-full max-w-[460px] shadow-[var(--console-shadow-strong)]">
-        <header className="flex items-center justify-between rounded-t-2xl border-b border-[var(--console-border)] bg-[var(--console-subpanel)] px-4 py-3">
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#6fe8ff]">Relagraph Console</p>
-          <Badge>v0.1</Badge>
+    <main className="flex min-h-screen items-center justify-center bg-[var(--console-bg)] px-5 py-10">
+      <Card className="w-full max-w-[460px]">
+        <header className="flex items-center justify-between rounded-t-xl border-b border-[var(--console-border)] bg-[var(--console-subpanel)] px-5 py-4">
+          <p className="text-sm font-semibold tracking-tight text-[var(--console-text)]">Relagraph</p>
+          <Badge>Beta</Badge>
         </header>
 
         <div className="px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--console-success)]">Authentication</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Authentication</p>
           <h1 className="mt-2 text-xl font-semibold text-[var(--console-text-strong)]">
             {mode === "login" ? "Access Workspace" : "Create Operator Account"}
           </h1>
@@ -81,11 +79,7 @@ export default function AuthForm() {
               type="button"
               size="md"
               variant={mode === "login" ? "primary" : "ghost"}
-              className={`rounded-md border ${
-                mode === "login"
-                  ? "border-[var(--console-accent)] bg-[#08222b] text-[#6fe8ff]"
-                  : "border-transparent bg-transparent text-[var(--console-text-muted)] hover:bg-[#131d31]"
-              }`}
+              className="rounded-md"
               onClick={() => setMode("login")}
             >
               Login
@@ -94,11 +88,7 @@ export default function AuthForm() {
               type="button"
               size="md"
               variant={mode === "register" ? "primary" : "ghost"}
-              className={`rounded-md border ${
-                mode === "register"
-                  ? "border-[var(--console-accent)] bg-[#08222b] text-[#6fe8ff]"
-                  : "border-transparent bg-transparent text-[var(--console-text-muted)] hover:bg-[#131d31]"
-              }`}
+              className="rounded-md"
               onClick={() => setMode("register")}
             >
               Register
