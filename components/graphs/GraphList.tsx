@@ -4,8 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
 import { FormEvent, useState } from "react"
 import { useRouter } from "next/navigation"
+import { signOut } from "next-auth/react"
 
-import { logout } from "@/lib/api/auth"
 import { createGraph, fetchGraphs } from "@/lib/api/graphs"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
@@ -33,7 +33,7 @@ export default function GraphList() {
   })
 
   const logoutMutation = useMutation({
-    mutationFn: logout,
+    mutationFn: () => signOut({ redirect: false }),
     onSuccess: () => {
       router.push("/login")
       router.refresh()

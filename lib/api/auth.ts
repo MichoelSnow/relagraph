@@ -6,6 +6,16 @@ type ApiErrorEnvelope = {
   }
 }
 
+type RegisterInput = {
+  username: string
+  password: string
+}
+
+type RegisterResponse = {
+  id: string
+  username: string
+}
+
 async function parseOrThrow<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorBody = (await response.json().catch(() => null)) as ApiErrorEnvelope | null
@@ -15,22 +25,7 @@ async function parseOrThrow<T>(response: Response): Promise<T> {
   return (await response.json()) as T
 }
 
-export async function login(input: { email: string; password: string }): Promise<{ id: string; email: string }> {
-  const response = await fetch("/api/v1/auth/login", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json"
-    },
-    body: JSON.stringify(input)
-  })
-
-  return parseOrThrow(response)
-}
-
-export async function register(input: {
-  email: string
-  password: string
-}): Promise<{ id: string; email: string }> {
+export async function register(input: RegisterInput): Promise<RegisterResponse> {
   const response = await fetch("/api/v1/auth/register", {
     method: "POST",
     headers: {
@@ -39,10 +34,5 @@ export async function register(input: {
     body: JSON.stringify(input)
   })
 
-  return parseOrThrow(response)
-}
-
-export async function logout(): Promise<void> {
-  const response = await fetch("/api/v1/auth/logout", { method: "POST" })
-  await parseOrThrow<{ ok: true }>(response)
+  return parseOrThrow<RegisterResponse>(response)
 }

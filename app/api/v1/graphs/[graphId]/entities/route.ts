@@ -6,6 +6,7 @@ import { NextResponse } from "next/server"
 import { getDb } from "@/db/client"
 import { entity } from "@/db/schema"
 import { requireApiGraphAccess } from "@/server/api/auth"
+import { requireCsrfProtection } from "@/server/api/csrf"
 import { isJsonRequest, jsonError } from "@/server/api/http"
 import type { Entity } from "@/types"
 
@@ -40,6 +41,11 @@ export async function GET(_: Request, context: RouteContext): Promise<NextRespon
 }
 
 export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
+  const csrfError = requireCsrfProtection(request)
+  if (csrfError) {
+    return csrfError
+  }
+
   const { graphId } = await context.params
   const auth = await requireApiGraphAccess(graphId)
   if (!auth.user) {

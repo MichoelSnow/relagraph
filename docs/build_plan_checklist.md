@@ -93,8 +93,7 @@ References: `docs/api_spec.md`, `docs/graph_projection_contract.md`
 Implement in `/app/api/v1/...` or `/server/api/...`:
 
 - [x] `POST /api/v1/auth/register`.
-- [x] `POST /api/v1/auth/login`.
-- [x] `POST /api/v1/auth/logout`.
+- [x] NextAuth credential/session routes under `/api/auth/*`.
 - [x] `GET /api/v1/auth/me`.
 - [x] `GET /api/v1/graphs` and `POST /api/v1/graphs`.
 - [x] `POST /api/v1/graphs/:graphId/graph/view`.

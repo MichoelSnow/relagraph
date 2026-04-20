@@ -1,98 +1,52 @@
-import { createHash, randomBytes } from "node:crypto"
-import { randomUUID } from "node:crypto"
-
-import { and, eq, gt } from "drizzle-orm"
-import { cookies } from "next/headers"
+import { and, eq } from "drizzle-orm"
+import { getServerSession } from "next-auth"
 import { redirect } from "next/navigation"
-import { NextResponse } from "next/server"
 
 import { getDb } from "@/db/client"
-import { appUser, userGraph, userSession } from "@/db/schema"
-
-export const SESSION_COOKIE_NAME = "relagraph_session"
-const SESSION_TTL_DAYS = 30
+import { appUser, userGraph } from "@/db/schema"
+import { authOptions } from "@/server/auth/options"
 
 export type AuthUser = {
   id: string
-  email: string
-}
-
-function nowIso(): string {
-  return new Date().toISOString()
-}
-
-function addDays(iso: string, days: number): string {
-  const date = new Date(iso)
-  date.setUTCDate(date.getUTCDate() + days)
-  return date.toISOString()
-}
-
-export function hashSessionToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex")
-}
-
-export async function createUserSession(userId: string): Promise<{ token: string; expiresAt: string }> {
-  const db = getDb()
-  const token = randomBytes(32).toString("base64url")
-  const tokenHash = hashSessionToken(token)
-  const expiresAt = addDays(nowIso(), SESSION_TTL_DAYS)
-
-  await db.insert(userSession).values({
-    id: randomUUID(),
-    userId,
-    tokenHash,
-    expiresAt
-  })
-
-  return { token, expiresAt }
-}
-
-export function setSessionCookie(response: NextResponse, token: string, expiresAt: string): void {
-  response.cookies.set({
-    name: SESSION_COOKIE_NAME,
-    value: token,
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: new Date(expiresAt)
-  })
-}
-
-export function clearSessionCookie(response: NextResponse): void {
-  response.cookies.set({
-    name: SESSION_COOKIE_NAME,
-    value: "",
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: new Date(0)
-  })
+  username: string
 }
 
 export async function getAuthUser(): Promise<AuthUser | null> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value
-  if (!token) {
+  let session: { user?: { id?: string | null; email?: string | null } } | null
+  try {
+    session = (await getServerSession(authOptions)) as { user?: { id?: string | null; email?: string | null } } | null
+  } catch {
     return null
   }
 
-  const db = getDb()
-  const tokenHash = hashSessionToken(token)
-  const now = nowIso()
+  const sessionUserId = session?.user?.id?.trim()
+  const sessionUsername = session?.user?.email?.trim().toLowerCase()
 
-  const rows = await db
-    .select({
-      id: appUser.id,
-      email: appUser.email
-    })
-    .from(userSession)
-    .innerJoin(appUser, eq(userSession.userId, appUser.id))
-    .where(and(eq(userSession.tokenHash, tokenHash), gt(userSession.expiresAt, now)))
+  const db = getDb()
+
+  if (sessionUserId) {
+    const usersById = await db
+      .select({ id: appUser.id, username: appUser.email })
+      .from(appUser)
+      .where(eq(appUser.id, sessionUserId))
+      .limit(1)
+
+    if (usersById[0]) {
+      return usersById[0]
+    }
+  }
+
+  if (!sessionUsername) {
+    return null
+  }
+
+  const usersByUsername = await db
+    .select({ id: appUser.id, username: appUser.email })
+    .from(appUser)
+    .where(eq(appUser.email, sessionUsername))
     .limit(1)
 
-  return rows[0] ?? null
+  return usersByUsername[0] ?? null
 }
 
 export async function requireAuthUser(): Promise<AuthUser> {
@@ -113,9 +67,4 @@ export async function requireGraphAccess(graphId: string, userId: string): Promi
     .limit(1)
 
   return rows.length > 0
-}
-
-export async function revokeSessionByToken(token: string): Promise<void> {
-  const db = getDb()
-  await db.delete(userSession).where(eq(userSession.tokenHash, hashSessionToken(token)))
 }
