@@ -9,6 +9,7 @@
  - Avoid copy-paste divergence across files
  - Handle edge cases explicitly (empty inputs, missing data, partial failures)
  - Update docs when behavior or data flows change
+ - Before v1.0 production, do not keep legacy/historical compatibility code paths; remove superseded code instead of preserving it for history
 
 
 ## Testing expectations
@@ -30,3 +31,7 @@
 ## Chat interactions
   - When preparing for significant changes, please ask any clarifying questions upfront to avoid back-and-forth
   - When the user asks a question (e.g. "what is the problem", "why did X happen"), answer the question only — do not change any code or run any commands unless explicitly instructed to do so
+
+## Tooling
+  - Use pnpm for package management instead of npm or yarn
+  - use poetry for python package management

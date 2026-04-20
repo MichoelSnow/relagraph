@@ -9,6 +9,7 @@ Includes:
 - Constraints
 - Indexes
 - Foreign key behaviors
+- Auth and graph tenancy ownership
 
 All SQL is executable in PostgreSQL.
 
@@ -22,17 +23,57 @@ CREATE TYPE entity_kind_enum AS ENUM ('person', 'animal', 'place');
 
 ---
 
+## Auth & Tenancy
+
+```sql
+CREATE TABLE app_user (
+    id UUID PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_app_user_email ON app_user(email);
+
+CREATE TABLE user_graph (
+    id UUID PRIMARY KEY,
+    owner_user_id UUID NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_graph_owner_user_id ON user_graph(owner_user_id);
+
+CREATE TABLE user_session (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES app_user(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_session_user_id ON user_session(user_id);
+CREATE INDEX idx_user_session_expires_at ON user_session(expires_at);
+```
+
+---
+
 ## Entity
 
 ```sql
 CREATE TABLE entity (
     id UUID PRIMARY KEY,
+    graph_id UUID REFERENCES user_graph(id) ON DELETE CASCADE,
     entity_kind entity_kind_enum NOT NULL,
     canonical_display_name TEXT NOT NULL,
     description TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_entity_graph_id ON entity(graph_id);
 ```
 
 ---
@@ -115,11 +156,14 @@ CREATE TABLE relationship_type (
 
 CREATE TABLE relationship (
     id UUID PRIMARY KEY,
+    graph_id UUID REFERENCES user_graph(id) ON DELETE CASCADE,
     relationship_type_id UUID NOT NULL REFERENCES relationship_type(id),
     notes TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+
+CREATE INDEX idx_relationship_graph_id ON relationship(graph_id);
 
 CREATE TABLE relationship_participant (
     id UUID PRIMARY KEY,

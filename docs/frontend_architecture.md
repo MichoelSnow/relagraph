@@ -47,13 +47,14 @@ Stack:
 
 ```
 /app
-  /page.tsx                -> Home / default graph
-  /graph/[entityId]/page.tsx
-  /components
-  /lib
+  /page.tsx                    -> auth-aware redirect
+  /login/page.tsx
+  /graphs/page.tsx
+  /graphs/[graphId]/page.tsx
+  /graph/[entityId]/page.tsx   -> legacy redirect
 ```
 
-- Primary route: `/graph/:entityId`
+- Primary route: `/graphs/:graphId`
 - Query params:
   - `as_of`
   - filters
@@ -66,6 +67,7 @@ Stack:
 
 ```ts
 type UIState = {
+  graphId: string
   centerEntityId: string
   asOf: string // ISO timestamp
   depth: number
@@ -101,15 +103,15 @@ type GraphState = {
 
 - `graph:view`
 - `graph:expand`
-- `entity:detail`
-- `relationship:detail`
+- `graphs:list`
+- `auth:me`
 
 ---
 
 ### Fetch: Initial Graph
 
 ```ts
-POST /graph/view
+POST /graphs/:graphId/graph/view
 ```
 
 Triggered when:
@@ -123,7 +125,7 @@ Triggered when:
 ### Fetch: Expand Node
 
 ```ts
-POST /graph/expand
+POST /graphs/:graphId/graph/expand
 ```
 
 Triggered when:
@@ -218,7 +220,7 @@ Triggered when:
 
 - Controls `asOf` in global state
 - Triggers:
-  - refetch `/graph/view`
+  - refetch `/graphs/:graphId/graph/view`
 
 ---
 

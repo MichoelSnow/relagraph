@@ -34,6 +34,7 @@ pnpm-debug.log*
 # Local caches
 .cache/
 .turbo/
+.pnpm-store/
 
 # Local database files (if used for tooling/tests)
 *.db

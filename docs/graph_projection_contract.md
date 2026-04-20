@@ -30,7 +30,7 @@ It is the **authoritative definition** of:
 ### Request
 
 ```json
-POST /api/v1/graph/view
+POST /api/v1/graphs/:graphId/graph/view
 
 {
   "center_entity_id": "uuid",
@@ -116,6 +116,7 @@ Filters are applied **before traversal**:
 - Begins at `center_entity_id`
 - Expands outward up to `depth` hops
 - Only traverses edges that pass filters
+- Traversal is constrained to entities/relationships in `:graphId`
 
 ---
 
@@ -199,6 +200,7 @@ Backend may enforce limits on:
 
 - Events are **not included in graph view (v1)**
 - Full relationship history is handled via separate endpoints
+- Expand endpoint uses the same contract shape at `POST /api/v1/graphs/:graphId/graph/expand`
 - This contract is optimized for:
   - graph rendering
   - expansion

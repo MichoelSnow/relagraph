@@ -1,0 +1,43 @@
+{
+  "name": "relagraph",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "dev": "next dev",
+    "dev:local": "pnpm db:up && pnpm dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "eslint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "5.99.0",
+    "cytoscape": "3.33.2",
+    "drizzle-orm": "0.45.2",
+    "next": "16.2.4",
+    "pg": "8.20.0",
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/node": "25.6.0",
+    "@types/pg": "^8.20.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "autoprefixer": "10.5.0",
+    "drizzle-kit": "0.31.10",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "16.2.4",
+    "postcss": "8.5.10",
+    "tailwindcss": "4.2.2",
+    "typescript": "6.0.3"
+  }
+}

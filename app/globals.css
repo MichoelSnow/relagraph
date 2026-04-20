@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --console-bg: #090d16;
+  --console-bg-grid: #ffffff33;
+  --console-panel: #0f1524;
+  --console-panel-muted: #111a2c;
+  --console-subpanel: #0b1120;
+  --console-border: #2a3347;
+  --console-text: #d7deef;
+  --console-text-strong: #f5f8ff;
+  --console-text-dim: #98a7c3;
+  --console-text-muted: #8ea1c6;
+  --console-accent: #00f3ff;
+  --console-accent-soft: #07222b;
+  --console-accent-soft-hover: #09303b;
+  --console-success: #15ff83;
+  --console-danger-border: #803044;
+  --console-danger-bg: #321725;
+  --console-danger-text: #ffadc2;
+  --console-shadow-strong: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --console-shadow: 0 16px 34px rgba(0, 0, 0, 0.45);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--console-text);
+  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  background: var(--console-bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.app-shell {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.console-atmosphere {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(0, 243, 255, 0.12), transparent 35%),
+    radial-gradient(circle at 80% 90%, rgba(21, 255, 131, 0.1), transparent 36%),
+    linear-gradient(180deg, var(--console-bg), var(--console-bg));
+}
+
+.console-grid {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      transparent 30px,
+      var(--console-bg-grid) 31px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0px,
+      transparent 30px,
+      var(--console-bg-grid) 31px
+    );
+}
+
+.console-focus {
+  outline: none;
+  border-color: var(--console-accent);
+  box-shadow: 0 0 0 2px #00f3ff33;
+}
+
+.fade-in {
+  animation: rise-fade 420ms ease-out both;
+}
+
+.stagger-1 {
+  animation-delay: 80ms;
+}
+
+.stagger-2 {
+  animation-delay: 140ms;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes rise-fade {
+    from {
+      transform: translateY(10px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+}

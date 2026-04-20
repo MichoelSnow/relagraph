@@ -13,120 +13,77 @@ Purpose:
 
 ## Principles
 
-- All edits happen via **CRUD/domain endpoints**
+- All edits happen via **graph-scoped endpoints**
 - Graph is **refetched or updated after mutations**
 - Multi-step flows must follow defined order
 - UI panel = source of truth for edits
 
 ---
 
-## 1. Create Entity
+## 1. Authenticate User
+
+### User Action
+- User logs in or registers
+
+### Flow
+1. POST `/auth/login` or POST `/auth/register`
+2. GET `/auth/me` to hydrate session state
+3. GET `/graphs` to load graph list
+
+---
+
+## 2. Create Graph
+
+### User Action
+- User creates a new graph from graph list page
+
+### Flow
+1. POST `/graphs`
+2. GET `/graphs` (or merge response into list state)
+3. Navigate to `/graphs/:graphId`
+
+---
+
+## 3. Create Entity
 
 ### User Action
 - User creates a new node
 
 ### Flow
-1. POST /entities
-2. (optional) POST /entity-names
+1. POST `/graphs/:graphId/entities`
 3. Refresh or merge entity into graph
 
 ---
 
-## 2. Create Relationship
+## 4. Create Relationship
 
 ### User Action
 - User connects two nodes
 
 ### Flow
-1. POST /relationships
-2. POST /relationships/:id/intervals
+1. POST `/graphs/:graphId/relationships`
+2. POST `/graphs/:graphId/relationships/:id/intervals`
 3. Refetch graph (or merge delta)
 
 ---
 
-## 3. Add Relationship Interval
+## 5. Add Relationship Interval
 
 ### User Action
 - User adds time range to relationship
 
 ### Flow
-1. POST /relationships/:id/intervals
+1. POST `/graphs/:graphId/relationships/:id/intervals`
 2. Refetch graph (if active at current time)
 
 ---
 
-## 4. Edit Relationship
-
-### User Action
-- Change type, roles, metadata
-
-### Flow
-1. PATCH /relationships/:id
-2. Refetch graph
-
----
-
-## 5. Delete / End Relationship
-
-### User Action
-- End relationship
-
-### Flow
-1. PATCH interval (set end date)
-2. Refetch graph
-
----
-
-## 6. Create Event
-
-### User Action
-- Add event (e.g., wedding)
-
-### Flow
-1. POST /events
-2. (optional) POST /event_relationship
-3. (optional) POST /event_participant
-
----
-
-## 7. Edit Entity
-
-### User Action
-- Update name or details
-
-### Flow
-1. PATCH /entities/:id
-2. (optional) PATCH /entity-names/:id
-
----
-
-## 8. Add Name
-
-### User Action
-- Add alternate name
-
-### Flow
-1. POST /entity-names
-
----
-
-## 9. Add Media
-
-### User Action
-- Upload or link media
-
-### Flow
-1. POST /media
-2. POST /media/link
-
----
-
-## 10. Expand Graph After Edit
+## 6. Expand Graph After Edit
 
 ### Rule
 
 After any mutation:
-- If change affects current time slice → refetch `/graph/view`
+- If change affects current time slice → refetch `/graphs/:graphId/graph/view`
 - Otherwise → no immediate graph update needed
 
 ---
