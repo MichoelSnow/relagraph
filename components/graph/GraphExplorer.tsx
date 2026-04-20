@@ -4,11 +4,12 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 
 import { fetchGraphExpand, fetchGraphView } from "@/lib/api/graph"
-import type { Edge, Entity, GraphResponse } from "@/types"
+import { EMPTY_GRAPH_STATE, mergeGraphState, toGraphState, type GraphState } from "@/lib/api/graphState"
 import Badge from "@/components/ui/Badge"
 import PageHeader from "@/components/ui/PageHeader"
 import PageLayout from "@/components/ui/PageLayout"
 import Section from "@/components/ui/Section"
+import Stack from "@/components/ui/Stack"
 import GraphCanvas from "./GraphCanvas"
 import SidePanel from "./SidePanel"
 import TimeSlider from "./TimeSlider"
@@ -19,11 +20,6 @@ type GraphExplorerProps = {
   initialAsOf: string
 }
 
-type GraphState = {
-  entities: Record<string, Entity>
-  edges: Record<string, Edge>
-}
-
 type GraphUiState = {
   asOf: string
   depth: number
@@ -31,32 +27,6 @@ type GraphUiState = {
     entityTypes: string[]
     relationshipTypes: string[]
     includeInactive: boolean
-  }
-}
-
-const EMPTY_GRAPH_STATE: GraphState = { entities: {}, edges: {} }
-
-function toGraphState(delta: GraphResponse): GraphState {
-  return {
-    entities: Object.fromEntries(delta.entities.map((entity) => [entity.id, entity])),
-    edges: Object.fromEntries(delta.edges.map((edge) => [edge.id, edge]))
-  }
-}
-
-function mergeGraphState(previous: GraphState, delta: GraphState): GraphState {
-  const nextEntities = { ...previous.entities }
-  for (const entity of Object.values(delta.entities)) {
-    nextEntities[entity.id] = entity
-  }
-
-  const nextEdges = { ...previous.edges }
-  for (const edge of Object.values(delta.edges)) {
-    nextEdges[edge.id] = edge
-  }
-
-  return {
-    entities: nextEntities,
-    edges: nextEdges
   }
 }
 
@@ -166,10 +136,12 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
       />
 
       <Section title="Controls">
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge>Nodes: {entities.length}</Badge>
-          <Badge>Edges: {edges.length}</Badge>
-          <Badge variant={isLoading ? "accent" : "success"}>{isLoading ? "Syncing..." : "Synced"}</Badge>
+        <Stack className="gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge>Nodes: {entities.length}</Badge>
+            <Badge>Edges: {edges.length}</Badge>
+            <Badge variant={isLoading ? "accent" : "success"}>{isLoading ? "Syncing..." : "Synced"}</Badge>
+          </div>
           <div className="w-full max-w-[360px]">
             <TimeSlider
               asOf={uiState.asOf}
@@ -178,29 +150,31 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
               }}
             />
           </div>
-        </div>
+        </Stack>
       </Section>
 
       <Section title="Canvas">
-        {errorMessage ? <p className="mb-3 text-sm text-[var(--console-danger-text)]">{errorMessage}</p> : null}
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <GraphCanvas
-            entities={entities}
-            edges={edges}
-            selectedEntityId={selectedEntityId}
-            onNodeClick={(clickedEntityId) => {
-              setSelectedEntityId(clickedEntityId)
-              expandMutation.mutate(clickedEntityId)
-            }}
-          />
-          <aside className="lg:sticky lg:top-4 lg:self-start">
-            <SidePanel
+        <Stack>
+          {errorMessage ? <p className="text-sm text-red-700">{errorMessage}</p> : null}
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <GraphCanvas
+              entities={entities}
+              edges={edges}
               selectedEntityId={selectedEntityId}
-              nodeCount={entities.length}
-              edgeCount={edges.length}
+              onNodeClick={(clickedEntityId) => {
+                setSelectedEntityId(clickedEntityId)
+                expandMutation.mutate(clickedEntityId)
+              }}
             />
-          </aside>
-        </div>
+            <aside className="lg:sticky lg:top-4 lg:self-start">
+              <SidePanel
+                selectedEntityId={selectedEntityId}
+                nodeCount={entities.length}
+                edgeCount={edges.length}
+              />
+            </aside>
+          </div>
+        </Stack>
       </Section>
     </PageLayout>
   )

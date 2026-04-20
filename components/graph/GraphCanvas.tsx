@@ -4,7 +4,7 @@ import cytoscape, { type ElementDefinition } from "cytoscape"
 import { useEffect, useMemo, useRef } from "react"
 
 import type { Edge, Entity } from "@/types"
-import { graphTheme } from "@/lib/ui/styles"
+import { graphTheme } from "@/lib/ui/graphTheme"
 
 type GraphCanvasProps = {
   entities: Entity[]
@@ -32,7 +32,7 @@ export default function GraphCanvas({
         id: entity.id,
         label: entity.display_name,
         entityKind: entity.entity_kind,
-        isSelected: entity.id === selectedEntityId
+        isSelected: entity.id === selectedEntityId ? "true" : "false"
       }
     }))
 
@@ -42,7 +42,7 @@ export default function GraphCanvas({
         source: edge.from_entity_id,
         target: edge.to_entity_id,
         relationshipType: edge.relationship_type,
-        active: edge.active
+        active: edge.active ? "true" : "false"
       }
     }))
 
@@ -95,18 +95,10 @@ export default function GraphCanvas({
           }
         },
         {
-          selector: "node[isSelected = true]",
+          selector: 'node[isSelected = "true"]',
           style: {
             "border-width": 5,
             "border-color": graphTheme.node.selectedBorder
-          }
-        },
-        {
-          selector: "node:hover",
-          style: {
-            "overlay-color": graphTheme.node.hoverOverlay,
-            "overlay-padding": 8,
-            "overlay-opacity": 0.16
           }
         },
         {
@@ -126,7 +118,7 @@ export default function GraphCanvas({
           }
         },
         {
-          selector: "edge[active = false]",
+          selector: 'edge[active = "false"]',
           style: {
             opacity: 0.45,
             "line-style": "dashed"
@@ -139,8 +131,7 @@ export default function GraphCanvas({
         fit: true,
         padding: 24
       },
-      userZoomingEnabled: true,
-      wheelSensitivity: 1
+      userZoomingEnabled: true
     })
 
     const handleTap = (event: cytoscape.EventObject) => {

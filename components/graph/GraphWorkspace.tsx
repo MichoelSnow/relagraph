@@ -9,10 +9,13 @@ import GraphExplorer from "@/components/graph/GraphExplorer"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import Card from "@/components/ui/Card"
+import FormContainer from "@/components/ui/FormContainer"
 import Input from "@/components/ui/Input"
-import SectionHeader from "@/components/ui/SectionHeader"
+import PageHeader from "@/components/ui/PageHeader"
+import PageLayout from "@/components/ui/PageLayout"
+import Section from "@/components/ui/Section"
 import Select from "@/components/ui/Select"
-import { buttonStyles } from "@/lib/ui/styles"
+import Stack from "@/components/ui/Stack"
 
 type GraphWorkspaceProps = {
   graphId: string
@@ -66,121 +69,103 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   }
 
   return (
-    <main className="console-atmosphere relative min-h-screen overflow-hidden bg-[var(--console-bg)] px-5 py-8 md:px-8 md:py-10">
-      <div className="console-grid pointer-events-none absolute inset-0 opacity-[0.12]" />
-      <section className="relative z-10 mx-auto w-full max-w-[1200px]">
-        <Card as="header" className="fade-in mb-5 p-5 shadow-[var(--console-shadow-strong)]">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--console-success)]">Graph Workspace</p>
-              <h1 className="mt-1 text-2xl font-semibold text-[var(--console-text-strong)]">{graphName}</h1>
-              <p className="mt-1 text-sm text-[var(--console-text-dim)]">Explore connections and expand from selected nodes.</p>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="ghost"
-                block
-                className="sm:w-auto"
-                onClick={() => setShowManager((previous) => !previous)}
-              >
-                {showManager ? "Hide controls" : "Manage graph"}
-              </Button>
-              <Link
-                href="/graphs"
-                className={buttonStyles({
-                  variant: "ghost",
-                  block: true,
-                  className: "sm:w-auto"
-                })}
-              >
-                Back to graphs
-              </Link>
-            </div>
+    <PageLayout>
+      <PageHeader
+        title={graphName}
+        description="Explore connections and expand from selected nodes."
+        action={(
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowManager((previous) => !previous)}
+            >
+              {showManager ? "Hide controls" : "Manage graph"}
+            </Button>
+            <Link
+              href="/graphs"
+              className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              Back to graphs
+            </Link>
           </div>
-        </Card>
+        )}
+      />
 
+      <Section title="Controls">
+        <Stack className="gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge>{entities.length} entities</Badge>
+            <FormContainer>
+              <label className="block">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Focus entity</span>
+                <Select
+                  value={selectedEntityId ?? ""}
+                  onChange={(event) => setSelectedOverride(event.target.value || null)}
+                  disabled={entities.length === 0}
+                >
+                  {entities.length === 0 ? <option value="">No entities available</option> : null}
+                  {entities.map((entity) => (
+                    <option key={entity.id} value={entity.id}>
+                      {entity.display_name} ({entity.entity_kind})
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            </FormContainer>
+          </div>
+
+          {(showManager || !selectedEntityId) ? (
+            <FormContainer>
+              <form onSubmit={onCreateEntity}>
+                <Stack className="gap-3">
+                  <label className="block">
+                    <span className="text-xs font-medium uppercase tracking-wide text-slate-500">New entity name</span>
+                    <Input
+                      value={newEntityName}
+                      onChange={(event) => setNewEntityName(event.target.value)}
+                      required
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Entity type</span>
+                    <Select
+                      value={newEntityKind}
+                      onChange={(event) => setNewEntityKind(event.target.value as "person" | "animal" | "place")}
+                    >
+                      <option value="person">person</option>
+                      <option value="animal">animal</option>
+                      <option value="place">place</option>
+                    </Select>
+                  </label>
+                  <Button
+                    type="submit"
+                    disabled={createEntityMutation.isPending}
+                    variant="primary"
+                  >
+                    {createEntityMutation.isPending ? "Creating..." : "Create entity"}
+                  </Button>
+                  {createEntityMutation.error ? (
+                    <Card variant="danger" className="p-3 text-sm">
+                      {(createEntityMutation.error as Error).message}
+                    </Card>
+                  ) : null}
+                </Stack>
+              </form>
+            </FormContainer>
+          ) : null}
+        </Stack>
+      </Section>
+
+      <Section title="Canvas">
         {selectedEntityId ? (
           <GraphExplorer graphId={graphId} entityId={selectedEntityId} initialAsOf={initialAsOf} />
         ) : (
-          <Card className="stagger-2 fade-in mb-5 border-dashed p-8 text-center text-sm text-[var(--console-text-dim)]">
+          <Card className="border-dashed p-8 text-center text-sm text-slate-500">
             No entities yet. Create your first entity to start this graph.
           </Card>
         )}
-
-        {(showManager || !selectedEntityId) ? (
-          <Card className="stagger-1 fade-in mt-5 grid gap-4 p-5 lg:grid-cols-[1.1fr_0.9fr]">
-            <Card as="form" variant="subpanel" onSubmit={onCreateEntity} className="space-y-3 p-4">
-              <SectionHeader>Create Entity</SectionHeader>
-              <label className="block">
-                <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--console-text-muted)]">Name</span>
-                <Input
-                  value={newEntityName}
-                  onChange={(event) => setNewEntityName(event.target.value)}
-                  required
-                />
-              </label>
-              <label className="block">
-                <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--console-text-muted)]">Kind</span>
-                <Select
-                  value={newEntityKind}
-                  onChange={(event) => setNewEntityKind(event.target.value as "person" | "animal" | "place")}
-                >
-                  <option value="person">person</option>
-                  <option value="animal">animal</option>
-                  <option value="place">place</option>
-                </Select>
-              </label>
-              <Button
-                type="submit"
-                disabled={createEntityMutation.isPending}
-                variant="primary"
-                className="tracking-[0.14em]"
-              >
-                {createEntityMutation.isPending ? "Creating..." : "Create entity"}
-              </Button>
-              {createEntityMutation.error ? (
-                <Card variant="danger" className="p-3 text-sm">
-                  {(createEntityMutation.error as Error).message}
-                </Card>
-              ) : null}
-            </Card>
-
-            <Card variant="subpanel" className="p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <SectionHeader>Focus Entity</SectionHeader>
-                <Badge>{entities.length} total</Badge>
-              </div>
-              {entitiesQuery.isLoading ? (
-                <Card variant="subpanel" className="mt-2 p-2 text-sm text-[var(--console-text-dim)]">
-                  Loading entities...
-                </Card>
-              ) : null}
-              {entitiesQuery.error ? (
-                <Card variant="danger" className="mt-2 p-2 text-sm">
-                  {(entitiesQuery.error as Error).message}
-                </Card>
-              ) : null}
-              <Select
-                value={selectedEntityId ?? ""}
-                onChange={(event) => setSelectedOverride(event.target.value || null)}
-                className="mt-2"
-                disabled={entities.length === 0}
-              >
-                {entities.length === 0 ? <option value="">No entities available</option> : null}
-                {entities.map((entity) => (
-                  <option key={entity.id} value={entity.id}>
-                    {entity.display_name} ({entity.entity_kind})
-                  </option>
-                ))}
-              </Select>
-              <p className="mt-3 text-xs text-[var(--console-text-dim)]">
-                Choose which entity the graph view should center on.
-              </p>
-            </Card>
-          </Card>
-        ) : null}
-      </section>
-    </main>
+      </Section>
+    </PageLayout>
   )
 }

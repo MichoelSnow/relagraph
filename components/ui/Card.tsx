@@ -1,7 +1,6 @@
 import type { ComponentPropsWithoutRef, ElementType } from "react"
 
 import { cx } from "@/lib/ui/cx"
-import { cardStyles } from "@/lib/ui/styles"
 
 type CardTag = "section" | "article" | "aside" | "header" | "div" | "form"
 
@@ -17,5 +16,12 @@ export default function Card<T extends CardTag = "section">({
   ...props
 }: CardProps<T>) {
   const Component = (as ?? "section") as ElementType
-  return <Component className={cx(cardStyles(variant), className)} {...props} />
+  const variantClass =
+    variant === "danger"
+      ? "rounded-lg border border-red-200 bg-red-50 text-red-700 shadow-sm"
+      : variant === "subpanel"
+        ? "rounded-lg border border-slate-200 bg-slate-50 text-slate-700"
+        : "rounded-xl border border-slate-200 bg-white text-slate-900 shadow-sm"
+
+  return <Component className={cx(variantClass, className)} {...props} />
 }

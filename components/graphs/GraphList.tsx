@@ -10,8 +10,12 @@ import { createGraph, fetchGraphs } from "@/lib/api/graphs"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import Card from "@/components/ui/Card"
+import FormContainer from "@/components/ui/FormContainer"
 import Input from "@/components/ui/Input"
-import SectionHeader from "@/components/ui/SectionHeader"
+import PageHeader from "@/components/ui/PageHeader"
+import PageLayout from "@/components/ui/PageLayout"
+import Section from "@/components/ui/Section"
+import Stack from "@/components/ui/Stack"
 
 export default function GraphList() {
   const [name, setName] = useState("")
@@ -52,63 +56,54 @@ export default function GraphList() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--console-bg)] px-5 py-8 md:px-8 md:py-10">
-      <section className="mx-auto w-full max-w-[1200px]">
-        <Card as="header" className="mb-5 p-5">
-          <div className="mb-3 flex items-center justify-between border-b border-[var(--console-border)] pb-3">
-            <p className="text-sm font-semibold tracking-tight text-[var(--console-text)]">Relagraph</p>
-            <Badge>/graphs</Badge>
-          </div>
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Workspace</p>
-              <h1 className="mt-1 text-2xl font-semibold text-[var(--console-text-strong)]">Your Graphs</h1>
-              <p className="mt-1 text-sm text-[var(--console-text-dim)]">Select an existing graph or create a new one.</p>
-            </div>
-            <Button
-              type="button"
-              onClick={() => logoutMutation.mutate()}
-              variant="ghost"
-              block
-              className="md:w-auto"
-            >
-              Logout
-            </Button>
-          </div>
-        </Card>
-
-        <Card as="form" className="mb-5 p-5" onSubmit={onSubmit}>
-          <label className="block">
-            <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">New graph name</span>
-            <Input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Family graph"
-              required
-            />
-          </label>
-          <Button
-            type="submit"
-            disabled={createGraphMutation.isPending}
-            variant="primary"
-            className="mt-3"
-          >
-            {createGraphMutation.isPending ? "Creating..." : "Create graph"}
+    <PageLayout>
+      <PageHeader
+        title="Your Graphs"
+        description="Select an existing graph or create a new one."
+        action={(
+          <Button type="button" onClick={() => logoutMutation.mutate()} variant="ghost">
+            Logout
           </Button>
-          {createGraphMutation.error ? (
-            <Card variant="danger" className="mt-3 px-3 py-2 text-sm">
-              {(createGraphMutation.error as Error).message}
-            </Card>
-          ) : null}
-        </Card>
+        )}
+      />
 
-        <Card className="p-5">
-          <div className="mb-3 flex items-center justify-between">
-            <SectionHeader>Existing graphs</SectionHeader>
+      <Section title="Create Graph">
+        <FormContainer>
+          <form onSubmit={onSubmit}>
+            <Stack className="gap-3">
+              <label className="block">
+                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">New graph name</span>
+                <Input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Family graph"
+                  required
+                />
+              </label>
+              <Button
+                type="submit"
+                disabled={createGraphMutation.isPending}
+                variant="primary"
+              >
+                {createGraphMutation.isPending ? "Creating..." : "Create graph"}
+              </Button>
+              {createGraphMutation.error ? (
+                <Card variant="danger" className="px-3 py-2 text-sm">
+                  {(createGraphMutation.error as Error).message}
+                </Card>
+              ) : null}
+            </Stack>
+          </form>
+        </FormContainer>
+      </Section>
+
+      <Section title="Existing Graphs">
+        <Stack className="gap-3">
+          <div className="flex items-center justify-between">
             <Badge>{graphs.length} total</Badge>
           </div>
           {graphsQuery.isLoading ? (
-            <Card variant="subpanel" className="p-3 text-sm text-[var(--console-text-dim)]">
+            <Card variant="subpanel" className="p-3 text-sm text-slate-500">
               Loading your graphs...
             </Card>
           ) : null}
@@ -118,7 +113,7 @@ export default function GraphList() {
             </Card>
           ) : null}
           {graphs.length === 0 && !graphsQuery.isLoading ? (
-            <Card variant="subpanel" className="border-dashed p-5 text-sm text-[var(--console-text-dim)]">
+            <Card variant="subpanel" className="border-dashed p-5 text-sm text-slate-500">
               No graphs yet. Create your first graph above to get started.
             </Card>
           ) : null}
@@ -127,18 +122,18 @@ export default function GraphList() {
               <li key={graph.id}>
                 <Link
                   href={`/graphs/${graph.id}`}
-                  className="block rounded-lg border border-[var(--console-border)] bg-[var(--console-subpanel)] px-4 py-3 text-[var(--console-text)] transition-colors hover:bg-[#f8fafc]"
+                  className="block rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 transition-colors hover:bg-slate-100"
                 >
-                  <p className="truncate font-semibold text-[var(--console-text-strong)]">{graph.name}</p>
-                  <p className="mt-1 text-xs text-[var(--console-text-muted)]">
+                  <p className="truncate font-semibold">{graph.name}</p>
+                  <p className="mt-1 text-xs text-slate-500">
                     Open graph workspace
                   </p>
                 </Link>
               </li>
             ))}
           </ul>
-        </Card>
-      </section>
-    </main>
+        </Stack>
+      </Section>
+    </PageLayout>
   )
 }
