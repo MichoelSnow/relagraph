@@ -14,6 +14,8 @@ type GraphExplorerProps = {
   entityId: string
   asOf: string
   includeInactive: boolean
+  depth?: number
+  layoutMode?: "auto" | "manual"
   refreshKey?: number
   selectedEntityId?: string | null
   showNodeLabels?: boolean
@@ -23,13 +25,13 @@ type GraphExplorerProps = {
   onAddLinkedNodeFrom?: (entityId: string) => void
 }
 
-const DEFAULT_DEPTH = 1
-
 export default function GraphExplorer({
   graphId,
   entityId,
   asOf,
   includeInactive,
+  depth = 3,
+  layoutMode = "auto",
   refreshKey = 0,
   selectedEntityId = null,
   showNodeLabels = false,
@@ -46,7 +48,7 @@ export default function GraphExplorer({
     graph: EMPTY_GRAPH_STATE
   })
 
-  const scopeKey = `${graphId}|${entityId}|${asOf}|${DEFAULT_DEPTH}|${includeInactive}|${refreshKey}`
+  const scopeKey = `${graphId}|${entityId}|${asOf}|${depth}|${includeInactive}`
 
   const viewQuery = useQuery({
     queryKey: [
@@ -54,7 +56,7 @@ export default function GraphExplorer({
       graphId,
       entityId,
       asOf,
-      DEFAULT_DEPTH,
+      depth,
       includeInactive,
       refreshKey
     ],
@@ -64,7 +66,7 @@ export default function GraphExplorer({
         graph_id: graphId,
         center_entity_id: entityId,
         as_of: asOf,
-        depth: DEFAULT_DEPTH,
+        depth,
         filters: {
           entity_types: [],
           relationship_types: [],
@@ -96,7 +98,7 @@ export default function GraphExplorer({
         graph_id: graphId,
         entity_id: targetEntityId,
         as_of: asOf,
-        depth: DEFAULT_DEPTH,
+        depth,
         filters: {
           entity_types: [],
           relationship_types: [],
@@ -132,6 +134,7 @@ export default function GraphExplorer({
       <GraphCanvas
         entities={entities}
         edges={edges}
+        layoutMode={layoutMode}
         selectedEntityId={selectedEntityId}
         showNodeLabels={showNodeLabels}
         showRelationshipLabels={showRelationshipLabels}

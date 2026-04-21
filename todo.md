@@ -1,0 +1,1 @@
+- add generations in a visual language perspective (like a family tree) so that certain relationships can be visualized better and node snap 

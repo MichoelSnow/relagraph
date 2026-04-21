@@ -200,8 +200,10 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null)
   const [graphRefreshKey, setGraphRefreshKey] = useState(0)
   const [asOf, setAsOf] = useState(initialAsOf)
+  const [graphDepth, setGraphDepth] = useState(3)
   const [showNodeLabels, setShowNodeLabels] = useState(true)
   const [showRelationshipLabels, setShowRelationshipLabels] = useState(false)
+  const [layoutMode, setLayoutMode] = useState<"auto" | "manual">("auto")
   const [includeInactive, setIncludeInactive] = useState(TEMPORAL_SIMPLE_MODE)
   const [leftExpanded, setLeftExpanded] = useState(() => readBoolean(LEFT_PANEL_KEY, true))
   const [rightExpanded, setRightExpanded] = useState(() => readBoolean(RIGHT_PANEL_KEY, true))
@@ -339,13 +341,28 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
     if (focusOverride && entities.some((entity) => entity.id === focusOverride)) {
       return focusOverride
     }
+    if (selectedNodeId && entities.some((entity) => entity.id === selectedNodeId)) {
+      return selectedNodeId
+    }
     return entities[0]?.id ?? null
-  }, [entities, focusOverride])
+  }, [entities, focusOverride, selectedNodeId])
 
   const selectedNode = useMemo(
     () => entities.find((entity) => entity.id === selectedNodeId) ?? null,
     [entities, selectedNodeId]
   )
+  const selectedEdgeSourceName = useMemo(() => {
+    if (!selectedEdge) {
+      return ""
+    }
+    return entities.find((entity) => entity.id === selectedEdge.from_entity_id)?.display_name ?? selectedEdge.from_entity_id
+  }, [entities, selectedEdge])
+  const selectedEdgeTargetName = useMemo(() => {
+    if (!selectedEdge) {
+      return ""
+    }
+    return entities.find((entity) => entity.id === selectedEdge.to_entity_id)?.display_name ?? selectedEdge.to_entity_id
+  }, [entities, selectedEdge])
 
   const sourceEntityId = useMemo(() => {
     if (sourceNodeId && entities.some((entity) => entity.id === sourceNodeId)) {
@@ -511,7 +528,6 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
       setGraphRefreshKey((previous) => previous + 1)
       queryClient.invalidateQueries({ queryKey: ["graph:entities", graphId] })
       if (sourceEntityId) {
-        setFocusOverride(sourceEntityId)
         setSelectedNodeId(sourceEntityId)
       }
       setSelectedEdge(null)
@@ -753,11 +769,39 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
 
         {!TEMPORAL_SIMPLE_MODE ? <TimeSlider asOf={asOf} onChange={setAsOf} /> : null}
 
+        <label className="block">
+          <FieldLabel>Distance</FieldLabel>
+          <Select value={String(graphDepth)} onChange={(event) => setGraphDepth(Number(event.target.value))}>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </Select>
+        </label>
+
         <Stack className="gap-2">
+          <ToggleRow label="Auto shape" checked={layoutMode === "auto"} onChange={(next) => setLayoutMode(next ? "auto" : "manual")} />
           <ToggleRow label="Node labels" checked={showNodeLabels} onChange={setShowNodeLabels} />
           <ToggleRow label="Edge labels" checked={showRelationshipLabels} onChange={setShowRelationshipLabels} />
           {!TEMPORAL_SIMPLE_MODE ? <ToggleRow label="Inactive" checked={includeInactive} onChange={setIncludeInactive} /> : null}
         </Stack>
+
+        <Card className="px-3 py-2">
+          <Stack className="gap-2">
+            <FieldLabel compact>Color key</FieldLabel>
+            <div className="grid grid-cols-1 gap-2 text-xs text-[var(--console-text-muted)]">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--console-text)]">Node colors</span>
+              <span style={{ color: "var(--graph-node-person, #2563eb)" }}>Person node</span>
+              <span style={{ color: "var(--graph-node-animal, #059669)" }}>Animal node</span>
+              <span style={{ color: "var(--graph-node-place, #d97706)" }}>Place node</span>
+              <span className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--console-text)]">Link colors</span>
+              <span style={{ color: "#2563eb" }}>Parent-child link</span>
+              <span style={{ color: "#e11d48" }}>Romantic link</span>
+              <span style={{ color: "#16a34a" }}>Animal link</span>
+              <span style={{ color: "#f59e0b" }}>Sibling link</span>
+            </div>
+          </Stack>
+        </Card>
       </Stack>
     </Section>
   )
@@ -947,6 +991,14 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
             <form onSubmit={onSaveEdge}>
               <Stack className="gap-3">
                 <label className="block">
+                  <FieldLabel compact>Source node</FieldLabel>
+                  <Input value={selectedEdgeSourceName} readOnly />
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Target node</FieldLabel>
+                  <Input value={selectedEdgeTargetName} readOnly />
+                </label>
+                <label className="block">
                   <FieldLabel compact>Relationship type</FieldLabel>
                   <Select value={edgeRelationshipTypeValue} onChange={(event) => onEdgeTypeChange(event.target.value)} required>
                     {relationshipTypes.map((type) => (
@@ -1114,6 +1166,8 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
       entityId={focusEntityId}
       asOf={asOf}
       includeInactive={includeInactive}
+      depth={graphDepth}
+      layoutMode={layoutMode}
       refreshKey={graphRefreshKey}
       selectedEntityId={selectedNodeId}
       showNodeLabels={showNodeLabels}
@@ -1140,7 +1194,6 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
       }}
       onAddLinkedNodeFrom={(nodeId) => {
         setSourceNodeId(nodeId)
-        setFocusOverride(nodeId)
         setSelectedNodeId(nodeId)
         setSelectedEdge(null)
         setCreateMode("new_node")
