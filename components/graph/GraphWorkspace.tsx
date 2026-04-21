@@ -165,14 +165,14 @@ type PanelShellProps = {
 
 function PanelShell({ title, side, expanded, onToggle, children }: PanelShellProps) {
   return (
-    <aside
+    <Stack
       className={cx(
-        "rounded-lg border border-[var(--console-border)] bg-[var(--console-panel)] transition-[width] duration-150",
+        "shrink-0 rounded-lg border border-[var(--console-border)] bg-[var(--console-panel)] transition-[width] duration-150",
         expanded ? "w-[320px]" : "w-12"
       )}
     >
-      <div className="flex h-full min-h-[68vh] flex-col">
-        <div className={cx("flex items-center border-b border-[var(--console-border)] p-1", expanded ? "justify-between" : "justify-center")}>
+      <Stack className="h-full min-h-[68vh] gap-0">
+        <Stack className={cx("flex-row items-center gap-0 border-b border-[var(--console-border)] p-1", expanded ? "justify-between" : "justify-center")}>
           {expanded ? (
             <span className="px-2 text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">
               {title}
@@ -186,10 +186,10 @@ function PanelShell({ title, side, expanded, onToggle, children }: PanelShellPro
           >
             {side === "left" ? (expanded ? <ChevronLeftIcon /> : <ChevronRightIcon />) : expanded ? <ChevronRightIcon /> : <ChevronLeftIcon />}
           </button>
-        </div>
-        {expanded ? <div className="flex-1 overflow-y-auto p-2">{children}</div> : null}
-      </div>
-    </aside>
+        </Stack>
+        {expanded ? <Stack className="flex-1 overflow-y-auto p-2">{children}</Stack> : null}
+      </Stack>
+    </Stack>
   )
 }
 
@@ -1230,7 +1230,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
         )}
       />
 
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3">
+      <Stack className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-stretch gap-3">
         <PanelShell title="Controls" side="left" expanded={leftExpanded} onToggle={() => setLeftExpanded((value) => !value)}>
           {controlsPanel}
         </PanelShell>
@@ -1242,7 +1242,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
         <PanelShell title="Edit" side="right" expanded={rightExpanded} onToggle={() => setRightExpanded((value) => !value)}>
           {editPanel}
         </PanelShell>
-      </div>
+      </Stack>
     </PageLayout>
   )
 }

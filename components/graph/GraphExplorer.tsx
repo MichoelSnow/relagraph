@@ -7,6 +7,7 @@ import { fetchGraphExpand, fetchGraphView } from "@/lib/api/graph"
 import { EMPTY_GRAPH_STATE, mergeGraphState, toGraphState, type GraphState } from "@/lib/api/graphState"
 import type { Edge } from "@/types"
 import Card from "@/components/ui/Card"
+import Stack from "@/components/ui/Stack"
 import GraphCanvas from "./GraphCanvas"
 
 type GraphExplorerProps = {
@@ -130,7 +131,7 @@ export default function GraphExplorer({
     null
 
   return (
-    <div className="relative h-full min-h-[520px]">
+    <Stack className="relative h-full min-h-[520px] gap-0">
       <GraphCanvas
         entities={entities}
         edges={edges}
@@ -148,10 +149,10 @@ export default function GraphExplorer({
         onAddLinkedNodeFrom={onAddLinkedNodeFrom}
       />
       {errorMessage ? (
-        <div className="pointer-events-none absolute bottom-3 right-3">
+        <Stack className="pointer-events-none absolute bottom-3 right-3 gap-0">
           <Card variant="danger" className="px-2 py-1 text-xs">Error</Card>
-        </div>
+        </Stack>
       ) : null}
-    </div>
+    </Stack>
   )
 }
