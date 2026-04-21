@@ -5,33 +5,39 @@ import { useMemo, useState } from "react"
 
 import { fetchGraphExpand, fetchGraphView } from "@/lib/api/graph"
 import { EMPTY_GRAPH_STATE, mergeGraphState, toGraphState, type GraphState } from "@/lib/api/graphState"
-import Badge from "@/components/ui/Badge"
-import PageHeader from "@/components/ui/PageHeader"
-import PageLayout from "@/components/ui/PageLayout"
-import Section from "@/components/ui/Section"
-import Stack from "@/components/ui/Stack"
+import type { Edge } from "@/types"
+import Card from "@/components/ui/Card"
 import GraphCanvas from "./GraphCanvas"
-import SidePanel from "./SidePanel"
-import TimeSlider from "./TimeSlider"
 
 type GraphExplorerProps = {
   graphId: string
   entityId: string
-  initialAsOf: string
-}
-
-type GraphUiState = {
   asOf: string
-  depth: number
-  filters: {
-    entityTypes: string[]
-    relationshipTypes: string[]
-    includeInactive: boolean
-  }
+  includeInactive: boolean
+  refreshKey?: number
+  selectedEntityId?: string | null
+  showNodeLabels?: boolean
+  showRelationshipLabels?: boolean
+  onNodeSelect?: (entityId: string) => void
+  onEdgeSelect?: (edge: Edge | null) => void
+  onAddLinkedNodeFrom?: (entityId: string) => void
 }
 
-export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphExplorerProps) {
-  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null)
+const DEFAULT_DEPTH = 1
+
+export default function GraphExplorer({
+  graphId,
+  entityId,
+  asOf,
+  includeInactive,
+  refreshKey = 0,
+  selectedEntityId = null,
+  showNodeLabels = false,
+  showRelationshipLabels = false,
+  onNodeSelect,
+  onEdgeSelect,
+  onAddLinkedNodeFrom
+}: GraphExplorerProps) {
   const [expandedState, setExpandedState] = useState<{
     scopeKey: string
     graph: GraphState
@@ -39,40 +45,30 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
     scopeKey: "",
     graph: EMPTY_GRAPH_STATE
   })
-  const [uiState, setUiState] = useState<GraphUiState>({
-    asOf: initialAsOf,
-    depth: 1,
-    filters: {
-      entityTypes: [],
-      relationshipTypes: [],
-      includeInactive: false
-    }
-  })
 
-  const scopeKey = `${graphId}|${entityId}|${uiState.asOf}|${uiState.depth}|${uiState.filters.entityTypes.join(",")}|${uiState.filters.relationshipTypes.join(",")}|${uiState.filters.includeInactive}`
+  const scopeKey = `${graphId}|${entityId}|${asOf}|${DEFAULT_DEPTH}|${includeInactive}|${refreshKey}`
 
   const viewQuery = useQuery({
     queryKey: [
       "graph:view",
       graphId,
       entityId,
-      uiState.asOf,
-      uiState.depth,
-      uiState.filters.entityTypes.join(","),
-      uiState.filters.relationshipTypes.join(","),
-      uiState.filters.includeInactive
+      asOf,
+      DEFAULT_DEPTH,
+      includeInactive,
+      refreshKey
     ],
     enabled: entityId.length > 0,
     queryFn: async () =>
       fetchGraphView({
         graph_id: graphId,
         center_entity_id: entityId,
-        as_of: uiState.asOf,
-        depth: uiState.depth,
+        as_of: asOf,
+        depth: DEFAULT_DEPTH,
         filters: {
-          entity_types: uiState.filters.entityTypes,
-          relationship_types: uiState.filters.relationshipTypes,
-          include_inactive: uiState.filters.includeInactive
+          entity_types: [],
+          relationship_types: [],
+          include_inactive: includeInactive
         },
         already_loaded: {
           entity_ids: [],
@@ -94,12 +90,12 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
       fetchGraphExpand({
         graph_id: graphId,
         entity_id: targetEntityId,
-        as_of: uiState.asOf,
-        depth: uiState.depth,
+        as_of: asOf,
+        depth: DEFAULT_DEPTH,
         filters: {
-          entity_types: uiState.filters.entityTypes,
-          relationship_types: uiState.filters.relationshipTypes,
-          include_inactive: uiState.filters.includeInactive
+          entity_types: [],
+          relationship_types: [],
+          include_inactive: includeInactive
         },
         already_loaded: {
           entity_ids: Object.keys(graphState.entities),
@@ -121,61 +117,33 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
 
   const entities = useMemo(() => Object.values(graphState.entities), [graphState.entities])
   const edges = useMemo(() => Object.values(graphState.edges), [graphState.edges])
-
-  const isLoading = viewQuery.isLoading || expandMutation.isPending
   const errorMessage =
     (viewQuery.error as Error | null)?.message ??
     (expandMutation.error as Error | null)?.message ??
     null
 
   return (
-    <PageLayout className="space-y-4">
-      <PageHeader
-        title="Graph Explorer"
-        description="Navigate relationships and expand from selected nodes."
+    <div className="relative h-full min-h-[520px]">
+      <GraphCanvas
+        entities={entities}
+        edges={edges}
+        selectedEntityId={selectedEntityId}
+        showNodeLabels={showNodeLabels}
+        showRelationshipLabels={showRelationshipLabels}
+        onNodeClick={(clickedEntityId) => {
+          onNodeSelect?.(clickedEntityId)
+          expandMutation.mutate(clickedEntityId)
+        }}
+        onEdgeClick={(clickedRelationshipId) => {
+          onEdgeSelect?.(graphState.edges[clickedRelationshipId] ?? null)
+        }}
+        onAddLinkedNodeFrom={onAddLinkedNodeFrom}
       />
-
-      <Section title="Controls">
-        <Stack className="gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <Badge>Nodes: {entities.length}</Badge>
-            <Badge>Edges: {edges.length}</Badge>
-            <Badge variant={isLoading ? "accent" : "success"}>{isLoading ? "Syncing..." : "Synced"}</Badge>
-          </div>
-          <div className="w-full max-w-[360px]">
-            <TimeSlider
-              asOf={uiState.asOf}
-              onChange={(nextAsOf) => {
-                setUiState((previous) => ({ ...previous, asOf: nextAsOf }))
-              }}
-            />
-          </div>
-        </Stack>
-      </Section>
-
-      <Section title="Canvas">
-        <Stack>
-          {errorMessage ? <p className="text-sm text-[var(--console-danger-text)]">{errorMessage}</p> : null}
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-            <GraphCanvas
-              entities={entities}
-              edges={edges}
-              selectedEntityId={selectedEntityId}
-              onNodeClick={(clickedEntityId) => {
-                setSelectedEntityId(clickedEntityId)
-                expandMutation.mutate(clickedEntityId)
-              }}
-            />
-            <aside className="lg:sticky lg:top-4 lg:self-start">
-              <SidePanel
-                selectedEntityId={selectedEntityId}
-                nodeCount={entities.length}
-                edgeCount={edges.length}
-              />
-            </aside>
-          </div>
-        </Stack>
-      </Section>
-    </PageLayout>
+      {errorMessage ? (
+        <div className="pointer-events-none absolute bottom-3 right-3">
+          <Card variant="danger" className="px-2 py-1 text-xs">Error</Card>
+        </div>
+      ) : null}
+    </div>
   )
 }

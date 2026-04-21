@@ -13,33 +13,34 @@ Do NOT add sections. Do NOT write long prose.
 
 ## Current Objective
 (1–2 sentences max)
-- Close remaining medium-severity compliance gaps from architecture/design-system/ui scaffold audits.
-- Keep auth + graph workspace stable while refactoring UI primitives and interface/application boundaries.
+- Stabilize desktop-first graph workspace UX and complete editable node/edge workflows from canvas interactions.
+- Align editing behavior with newly added update APIs and verify end-to-end mutation + graph refresh behavior.
 
 ---
 
 ## Completed This Session
 (max 5 bullets)
-- Removed custom shared style-system file and decoupled UI components from `lib/ui/styles.ts`.
-- Updated `Button`, `Card`, `Badge`, `Input`, `Select`, `SectionHeader` to use direct Tailwind class composition.
-- Added `lib/ui/graphTheme.ts` and updated graph canvas to import theme tokens from it.
-- Standardized vertical spacing using `Stack` in `AuthForm`, `GraphList`, `GraphExplorer`, and `GraphWorkspace`.
-- Extracted graph transform/merge logic from interface component into `lib/api/graphState.ts`; `GraphExplorer` now orchestrates only.
+- Refactored `/graphs/[graphId]` to a strict desktop 3-panel workspace with collapsible left/right rails (controls/canvas/edit).
+- Implemented Phase 9 UI wiring for create entity + create relationship + interval with graph refresh key invalidation.
+- Added update APIs and client calls: `PATCH /graphs/:graphId/entities/:id` and `PATCH /graphs/:graphId/relationships/:id`.
+- Added canvas node `+` affordance to preselect source node and open linked-node creation flow in right panel.
+- Removed redundant inner section headings (`Controls`, `Edit`) from panel content and removed obsolete `SidePanel` component.
 
 ---
 
 ## In Progress / Open
 (max 5 bullets)
-- Validate full production build in user environment (`pnpm build` blocked in sandbox runtime here).
-- Re-run policy audit pass to confirm no remaining medium/high violations after refactor.
+- Validate updated editing UX manually (node edit, edge edit, create linked node, link existing node) on real browser flows.
+- Confirm whether edge `+` should remain absent (current model uses binary edges only, so no single-ended edge state exists).
 
 ---
 
 ## Next Concrete Steps
 (ordered, actionable, max 5)
-1. Run `pnpm build` in local terminal and confirm success.
-2. Re-audit against `agents.md`, `architecture.md`, `design_system.md`, `security_baseline.md`, `ui_patterns.md`, `ui_scaffold.md`.
-3. Address any remaining violations in priority order, then re-run `pnpm lint && pnpm typecheck`.
+1. Manually test canvas-driven workflows on `/graphs/[graphId]` and capture any UX defects.
+2. Decide and implement final edge `+` policy for branch creation UX (or document intentionally unsupported).
+3. Run `pnpm build` locally and verify no runtime regressions after API/UI changes.
+4. Re-audit against `agents.md`, `architecture.md`, `design_system.md`, `security_baseline.md`, `ui_patterns.md`, `ui_scaffold.md`.
 
 ---
 
@@ -49,29 +50,25 @@ Branch:
 - `feature/ai-spec-integration`
 
 Modified Files:
-- `components/auth/AuthForm.tsx`
 - `components/graph/GraphCanvas.tsx`
 - `components/graph/GraphExplorer.tsx`
 - `components/graph/GraphWorkspace.tsx`
-- `components/graphs/GraphList.tsx`
-- `components/ui/Badge.tsx`
-- `components/ui/Button.tsx`
-- `components/ui/Card.tsx`
-- `components/ui/Input.tsx`
-- `components/ui/SectionHeader.tsx`
-- `components/ui/Select.tsx`
+- `components/graph/SidePanel.tsx` (deleted)
+- `docs/api_spec.md`
+- `docs/build_plan_checklist.md`
 - `docs/core/session_state.md`
-- `lib/api/graphState.ts` (new)
-- `lib/ui/graphTheme.ts` (new)
-- `lib/ui/styles.ts` (deleted)
+- `docs/editing_flows.md`
+- `lib/api/graphs.ts`
+- `app/api/v1/graphs/[graphId]/entities/[id]/route.ts` (new)
+- `app/api/v1/graphs/[graphId]/relationships/[id]/route.ts` (new)
 
 Uncommitted Changes:
 - Present across the files listed above; no commit created in this session.
 
 Notes:
 (max 3 bullets, only critical info)
-- `pnpm lint && pnpm typecheck` passed after refactor.
-- Sandbox `pnpm build` failed due to Turbopack process/port permission limits; user should run locally.
+- `pnpm lint && pnpm typecheck` currently pass after API + workspace + canvas changes.
+- API spec/docs were updated to include the new PATCH endpoints and edit flow notes.
 
 ---
 

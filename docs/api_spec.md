@@ -217,6 +217,17 @@ Response (`201`):
 }
 ```
 
+### PATCH `/graphs/:graphId/entities/:id`
+Update editable entity fields in one graph.
+
+Request:
+```json
+{
+  "display_name": "Alex Updated",
+  "entity_kind": "person"
+}
+```
+
 ---
 
 ## Relationships
@@ -264,6 +275,20 @@ Response (`201`):
   "relationship_id": "uuid",
   "start": "2020-01-01T00:00:00Z",
   "end": null
+}
+```
+
+### PATCH `/graphs/:graphId/relationships/:id`
+Update relationship type and participant roles in one graph.
+
+Request:
+```json
+{
+  "relationship_type": "familial",
+  "participants": [
+    { "entity_id": "uuid", "role": "parent" },
+    { "entity_id": "uuid", "role": "child" }
+  ]
 }
 ```
 

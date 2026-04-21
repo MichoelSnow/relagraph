@@ -177,15 +177,15 @@ Implement minimal UI forms and API wiring for:
 
 - [ ] Create Entity flow:
 - [x] `POST /api/v1/graphs/:graphId/entities`.
-- [ ] Refresh graph or merge returned entity per flow rules.
+- [x] Refresh graph or merge returned entity per flow rules.
 
 - [ ] Create Relationship flow:
 - [x] `POST /api/v1/graphs/:graphId/relationships`.
 - [x] `POST /api/v1/graphs/:graphId/relationships/:id/intervals`.
-- [ ] Refetch graph or merge delta per flow rules.
+- [x] Refetch graph or merge delta per flow rules.
 
 Phase gate:
-- [ ] User can create entity and relationship from UI and see graph state update correctly.
+- [x] User can create entity and relationship from UI and see graph state update correctly.
 
 ---
 
