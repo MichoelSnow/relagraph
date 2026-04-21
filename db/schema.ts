@@ -11,6 +11,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid
 } from "drizzle-orm/pg-core"
 
@@ -63,7 +64,7 @@ export const entity = pgTable("entity", {
   id: uuid("id").primaryKey(),
   graphId: uuid("graph_id").references(() => userGraph.id, { onDelete: "cascade" }),
   entityKind: entityKindEnum("entity_kind").notNull(),
-  canonicalDisplayName: text("canonical_display_name").notNull(),
+  canonicalDisplayName: text("canonical_display_name").notNull().default(""),
   description: text("description"),
   createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { mode: "string" }).notNull().defaultNow()
@@ -145,7 +146,7 @@ export const entityName = pgTable(
     languageCode: text("language_code"),
     scriptCode: text("script_code"),
     nameType: text("name_type").notNull(),
-    isPrimary: boolean("is_primary").default(false),
+    isPrimary: boolean("is_primary").notNull().default(false),
     startDate: date("start_date", { mode: "string" }),
     endDate: date("end_date", { mode: "string" }),
     notes: text("notes"),
@@ -153,6 +154,9 @@ export const entityName = pgTable(
   },
   (table) => [
     index("idx_entity_name_entity_id").on(table.entityId),
+    uniqueIndex("uq_entity_name_primary_per_entity")
+      .on(table.entityId)
+      .where(sql`${table.isPrimary} is true`),
     check("entity_name_date_check", sql`${table.endDate} is null or ${table.startDate} is null or ${table.endDate} >= ${table.startDate}`)
   ]
 )

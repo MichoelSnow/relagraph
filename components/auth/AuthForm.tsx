@@ -9,12 +9,14 @@ import { register } from "@/lib/api/auth"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import Card from "@/components/ui/Card"
+import FieldLabel from "@/components/ui/FieldLabel"
 import FormContainer from "@/components/ui/FormContainer"
 import Input from "@/components/ui/Input"
 import PageHeader from "@/components/ui/PageHeader"
 import PageLayout from "@/components/ui/PageLayout"
 import Section from "@/components/ui/Section"
 import Stack from "@/components/ui/Stack"
+import VisibilityIcon from "@/components/ui/VisibilityIcon"
 
 type Mode = "login" | "register"
 
@@ -97,7 +99,7 @@ export default function AuthForm() {
             <form onSubmit={onSubmit}>
               <Stack>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Username</span>
+                  <FieldLabel>Username</FieldLabel>
                   <Input
                     type="text"
                     value={username}
@@ -108,7 +110,7 @@ export default function AuthForm() {
                 </label>
 
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Password</span>
+                  <FieldLabel>Password</FieldLabel>
                   <div className="relative">
                     <Input
                       type={showPassword ? "text" : "password"}
@@ -124,26 +126,14 @@ export default function AuthForm() {
                       onClick={() => setShowPassword((previous) => !previous)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--console-text-muted)] hover:text-[var(--console-text)]"
                     >
-                      {showPassword ? (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                          <path d="M3 3l18 18" />
-                          <path d="M10.6 10.6a3 3 0 0 0 4.2 4.2" />
-                          <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 10 8 10 8a15.7 15.7 0 0 1-4.2 5.1" />
-                          <path d="M6.6 6.6A15.8 15.8 0 0 0 2 12s3 8 10 8a10.5 10.5 0 0 0 5.4-1.5" />
-                        </svg>
-                      ) : (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                          <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8z" />
-                          <circle cx="12" cy="12" r="3" />
-                        </svg>
-                      )}
+                      <VisibilityIcon hidden={showPassword} />
                     </button>
                   </div>
                 </label>
 
                 {mode === "register" ? (
                   <label className="block">
-                    <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Confirm password</span>
+                    <FieldLabel>Confirm password</FieldLabel>
                     <div className="relative">
                       <Input
                         type={showConfirmPassword ? "text" : "password"}
@@ -159,19 +149,7 @@ export default function AuthForm() {
                         onClick={() => setShowConfirmPassword((previous) => !previous)}
                         className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--console-text-muted)] hover:text-[var(--console-text)]"
                       >
-                        {showConfirmPassword ? (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                            <path d="M3 3l18 18" />
-                            <path d="M10.6 10.6a3 3 0 0 0 4.2 4.2" />
-                            <path d="M9.9 4.2A10.9 10.9 0 0 1 12 4c7 0 10 8 10 8a15.7 15.7 0 0 1-4.2 5.1" />
-                            <path d="M6.6 6.6A15.8 15.8 0 0 0 2 12s3 8 10 8a10.5 10.5 0 0 0 5.4-1.5" />
-                          </svg>
-                        ) : (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                            <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8z" />
-                            <circle cx="12" cy="12" r="3" />
-                          </svg>
-                        )}
+                        <VisibilityIcon hidden={showConfirmPassword} />
                       </button>
                     </div>
                   </label>

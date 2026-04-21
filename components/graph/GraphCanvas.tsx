@@ -135,8 +135,7 @@ export default function GraphCanvas({
             "text-background-opacity": 1,
             "text-background-padding": "2px",
             "line-color": resolvedTheme.edge.line,
-            "target-arrow-color": resolvedTheme.edge.line,
-            "target-arrow-shape": "triangle",
+            "target-arrow-shape": "none",
             "curve-style": "bezier"
           }
         },

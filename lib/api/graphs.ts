@@ -130,6 +130,17 @@ export type GraphEntityDetail = Entity & {
     start_date: string | null
     end_date: string | null
   } | null
+  entity_names: Array<{
+    name_text: string
+    name_type: string
+    language_code: string | null
+    script_code: string | null
+    notes: string | null
+    is_primary: boolean | null
+    sort_order: number | null
+    start_date: string | null
+    end_date: string | null
+  }>
   profile: Record<string, unknown> | null
 }
 
@@ -137,6 +148,8 @@ export type RelationshipTypeOption = {
   code: string
   display_name: string
   category: string | null
+  source_roles: string[]
+  target_roles: string[]
   used: boolean
 }
 
@@ -196,6 +209,16 @@ export async function fetchGraphEntityDetail(
   })
 
   return (await parseOrThrow(response)) as GraphEntityDetail
+}
+
+export async function deleteGraphEntity(
+  graphId: string,
+  entityId: string
+): Promise<void> {
+  const response = await fetch(`/api/v1/graphs/${graphId}/entities/${entityId}`, {
+    method: "DELETE"
+  })
+  await parseOrThrow(response)
 }
 
 export async function fetchRelationshipTypes(

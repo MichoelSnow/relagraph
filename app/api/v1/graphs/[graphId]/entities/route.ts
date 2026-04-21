@@ -4,7 +4,7 @@ import { asc, eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 
 import { getDb } from "@/db/client"
-import { entity } from "@/db/schema"
+import { entity, entityName } from "@/db/schema"
 import { requireApiGraphAccess } from "@/server/api/auth"
 import { requireCsrfProtection } from "@/server/api/csrf"
 import { isJsonRequest, jsonError } from "@/server/api/http"
@@ -70,17 +70,26 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
   const db = getDb()
   const id = randomUUID()
   const displayName = body.display_name.trim()
+  const entityKind = body.entity_kind
+  await db.transaction(async (tx) => {
+    await tx.insert(entity).values({
+      id,
+      graphId,
+      entityKind
+    })
 
-  await db.insert(entity).values({
-    id,
-    graphId,
-    entityKind: body.entity_kind,
-    canonicalDisplayName: displayName
+    await tx.insert(entityName).values({
+      id: randomUUID(),
+      entityId: id,
+      nameText: displayName,
+      nameType: "preferred",
+      isPrimary: true
+    })
   })
 
   const response: Entity = {
     id,
-    entity_kind: body.entity_kind,
+    entity_kind: entityKind,
     display_name: displayName
   }
 

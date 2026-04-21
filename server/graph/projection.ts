@@ -45,6 +45,8 @@ type RelationshipBundle = {
   intervals: RelationshipIntervalRow[]
 }
 
+const TIMELESS_RELATIONSHIP_START = "1900-01-01T00:00:00.000Z"
+
 function toGraphEntity(row: EntityRow): Entity {
   return {
     id: row.id,
@@ -98,21 +100,19 @@ function resolveRelationshipEdge(
     return null
   }
 
+  const hasTemporalIntervals = bundle.intervals.length > 0
   const activeIntervals = bundle.intervals.filter((interval) => {
     const startTime = Date.parse(interval.validFrom)
     const endTime = interval.validTo ? Date.parse(interval.validTo) : Number.POSITIVE_INFINITY
     return Number.isFinite(startTime) && startTime <= asOfTime && endTime >= asOfTime
   })
 
-  const isActive = activeIntervals.length > 0
+  const isActive = !hasTemporalIntervals || activeIntervals.length > 0
   if (!includeInactive && !isActive) {
     return null
   }
 
-  const selectedIntervals = isActive ? activeIntervals : bundle.intervals
-  if (selectedIntervals.length === 0) {
-    return null
-  }
+  const selectedIntervals = hasTemporalIntervals ? (isActive ? activeIntervals : bundle.intervals) : []
 
   const sortedByStart = [...selectedIntervals].sort(
     (a, b) => Date.parse(a.validFrom) - Date.parse(b.validFrom)
@@ -134,8 +134,8 @@ function resolveRelationshipEdge(
       to: participantMap.get(toEntityId) ?? ""
     },
     active: isActive,
-    start: firstInterval.validFrom,
-    end: anyOpenEnded ? null : (endingTimes.at(-1) ?? null)
+    start: firstInterval?.validFrom ?? TIMELESS_RELATIONSHIP_START,
+    end: hasTemporalIntervals ? (anyOpenEnded ? null : (endingTimes.at(-1) ?? null)) : null
   }
 }
 

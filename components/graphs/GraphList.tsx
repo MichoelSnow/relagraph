@@ -10,6 +10,7 @@ import { createGraph, fetchGraphs } from "@/lib/api/graphs"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import Card from "@/components/ui/Card"
+import FieldLabel from "@/components/ui/FieldLabel"
 import FormContainer from "@/components/ui/FormContainer"
 import Input from "@/components/ui/Input"
 import PageHeader from "@/components/ui/PageHeader"
@@ -72,7 +73,7 @@ export default function GraphList() {
           <form onSubmit={onSubmit}>
             <Stack className="gap-3">
               <label className="block">
-                <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">New graph name</span>
+                <FieldLabel>New graph name</FieldLabel>
                 <Input
                   value={name}
                   onChange={(event) => setName(event.target.value)}

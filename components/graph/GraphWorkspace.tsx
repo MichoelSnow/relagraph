@@ -8,6 +8,8 @@ import {
   createGraphEntity,
   createRelationship,
   createRelationshipInterval,
+  deleteGraphEntity,
+  type GraphEntityDetail,
   fetchGraphEntityDetail,
   fetchGraphEntities,
   fetchRelationshipTypes,
@@ -20,6 +22,7 @@ import GraphExplorer from "@/components/graph/GraphExplorer"
 import TimeSlider from "@/components/graph/TimeSlider"
 import Button from "@/components/ui/Button"
 import Card from "@/components/ui/Card"
+import FieldLabel from "@/components/ui/FieldLabel"
 import FormContainer from "@/components/ui/FormContainer"
 import Input from "@/components/ui/Input"
 import PageHeader from "@/components/ui/PageHeader"
@@ -65,8 +68,42 @@ type PlaceProfileInput = {
   notes: string
 }
 
+type EntityNameRecord = GraphEntityDetail["entity_names"][number]
+
 const LEFT_PANEL_KEY = "relagraph:workspace:left-panel-expanded"
 const RIGHT_PANEL_KEY = "relagraph:workspace:right-panel-expanded"
+const TEMPORAL_SIMPLE_MODE = true
+const DEFAULT_RELATIONSHIP_START = "1900-01-01T00:00:00.000Z"
+const NAME_TYPE_OPTIONS = ["legal", "birth", "chosen", "nickname", "maiden", "alias", "religious"] as const
+const NAME_LANGUAGE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "", label: "Unspecified" },
+  { value: "en", label: "English" },
+  { value: "es", label: "Spanish" },
+  { value: "fr", label: "French" },
+  { value: "de", label: "German" },
+  { value: "pt", label: "Portuguese" },
+  { value: "it", label: "Italian" },
+  { value: "ru", label: "Russian" },
+  { value: "ar", label: "Arabic" },
+  { value: "he", label: "Hebrew" },
+  { value: "hi", label: "Hindi" },
+  { value: "zh", label: "Chinese" },
+  { value: "ja", label: "Japanese" },
+  { value: "ko", label: "Korean" }
+]
+const SEX_AT_BIRTH_OPTIONS = ["", "female", "male", "intersex", "unknown"] as const
+const GENDER_IDENTITY_OPTIONS = [
+  "",
+  "woman",
+  "man",
+  "nonbinary",
+  "agender",
+  "trans woman",
+  "trans man",
+  "questioning",
+  "other",
+  "prefer not to say"
+] as const
 
 function readBoolean(key: string, fallback: boolean): boolean {
   if (typeof window === "undefined") {
@@ -165,22 +202,20 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   const [asOf, setAsOf] = useState(initialAsOf)
   const [showNodeLabels, setShowNodeLabels] = useState(true)
   const [showRelationshipLabels, setShowRelationshipLabels] = useState(false)
-  const [includeInactive, setIncludeInactive] = useState(false)
+  const [includeInactive, setIncludeInactive] = useState(TEMPORAL_SIMPLE_MODE)
   const [leftExpanded, setLeftExpanded] = useState(() => readBoolean(LEFT_PANEL_KEY, true))
   const [rightExpanded, setRightExpanded] = useState(() => readBoolean(RIGHT_PANEL_KEY, true))
   const [isNodeDetailLoading, setIsNodeDetailLoading] = useState(false)
 
-  const [nodeName, setNodeName] = useState("")
   const [nodeKind, setNodeKind] = useState<"person" | "animal" | "place">("person")
   const [entityNameText, setEntityNameText] = useState("")
-  const [entityNameType, setEntityNameType] = useState("")
+  const [entityNameType, setEntityNameType] = useState<(typeof NAME_TYPE_OPTIONS)[number]>("legal")
   const [entityNameLanguage, setEntityNameLanguage] = useState("")
-  const [entityNameScript, setEntityNameScript] = useState("")
-  const [entityNameNotes, setEntityNameNotes] = useState("")
   const [entityNameIsPrimary, setEntityNameIsPrimary] = useState(true)
-  const [entityNameSortOrder, setEntityNameSortOrder] = useState("")
   const [entityNameStartDate, setEntityNameStartDate] = useState("")
   const [entityNameEndDate, setEntityNameEndDate] = useState("")
+  const [entityNamesByType, setEntityNamesByType] = useState<EntityNameRecord[]>([])
+  const [nameFormBaseline, setNameFormBaseline] = useState("")
   const [personProfile, setPersonProfile] = useState<PersonProfileInput>({
     birth_date: "",
     death_date: "",
@@ -221,7 +256,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   const [newLinkType, setNewLinkType] = useState("")
   const [newLinkFromRole, setNewLinkFromRole] = useState("")
   const [newLinkToRole, setNewLinkToRole] = useState("")
-  const [newLinkStart, setNewLinkStart] = useState(() => toLocalDatetimeInputValue(initialAsOf))
+  const [newLinkStart, setNewLinkStart] = useState("")
   const [newLinkEnd, setNewLinkEnd] = useState("")
 
   const queryClient = useQueryClient()
@@ -251,6 +286,54 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
 
   const entities = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
   const relationshipTypes = useMemo(() => relationshipTypesQuery.data ?? [], [relationshipTypesQuery.data])
+  const createLinkRelationshipTypeValue = useMemo(() => {
+    if (newLinkType && relationshipTypes.some((type) => type.code === newLinkType)) {
+      return newLinkType
+    }
+    return relationshipTypes[0]?.code ?? ""
+  }, [newLinkType, relationshipTypes])
+  const selectedCreateLinkRelationshipType = useMemo(
+    () => relationshipTypes.find((type) => type.code === createLinkRelationshipTypeValue) ?? null,
+    [relationshipTypes, createLinkRelationshipTypeValue]
+  )
+  const createLinkSourceRoleOptions = useMemo(
+    () => selectedCreateLinkRelationshipType?.source_roles ?? [],
+    [selectedCreateLinkRelationshipType]
+  )
+  const createLinkTargetRoleOptions = useMemo(
+    () => selectedCreateLinkRelationshipType?.target_roles ?? [],
+    [selectedCreateLinkRelationshipType]
+  )
+  const edgeRelationshipTypeValue = useMemo(() => {
+    if (edgeType && relationshipTypes.some((type) => type.code === edgeType)) {
+      return edgeType
+    }
+    return relationshipTypes[0]?.code ?? ""
+  }, [edgeType, relationshipTypes])
+  const selectedEdgeRelationshipType = useMemo(
+    () => relationshipTypes.find((type) => type.code === edgeRelationshipTypeValue) ?? null,
+    [relationshipTypes, edgeRelationshipTypeValue]
+  )
+  const edgeSourceRoleOptions = useMemo(
+    () => selectedEdgeRelationshipType?.source_roles ?? [],
+    [selectedEdgeRelationshipType]
+  )
+  const edgeTargetRoleOptions = useMemo(
+    () => selectedEdgeRelationshipType?.target_roles ?? [],
+    [selectedEdgeRelationshipType]
+  )
+  const createLinkSourceRoleValue = useMemo(() => {
+    if (newLinkFromRole) {
+      return newLinkFromRole
+    }
+    return createLinkSourceRoleOptions[0] ?? ""
+  }, [newLinkFromRole, createLinkSourceRoleOptions])
+  const createLinkTargetRoleValue = useMemo(() => {
+    if (newLinkToRole) {
+      return newLinkToRole
+    }
+    return createLinkTargetRoleOptions[0] ?? ""
+  }, [newLinkToRole, createLinkTargetRoleOptions])
 
   const focusEntityId = useMemo(() => {
     if (focusOverride && entities.some((entity) => entity.id === focusOverride)) {
@@ -283,11 +366,8 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
       if (!selectedNode) {
         throw new Error("No node selected")
       }
-      if (!nodeName.trim()) {
-        throw new Error("Name required")
-      }
       if (!entityNameText.trim()) {
-        throw new Error("Entity name required")
+        throw new Error("Name required")
       }
       const profilePayload =
         nodeKind === "person"
@@ -296,16 +376,12 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
             ? animalProfile
             : placeProfile
       await updateGraphEntity(graphId, selectedNode.id, {
-        display_name: nodeName.trim(),
         entity_kind: nodeKind,
         entity_name: {
           name_text: entityNameText.trim(),
-          name_type: entityNameType.trim() || "preferred",
+          name_type: entityNameType,
           language_code: entityNameLanguage.trim() || null,
-          script_code: entityNameScript.trim() || null,
-          notes: entityNameNotes.trim() || null,
           is_primary: entityNameIsPrimary,
-          sort_order: entityNameSortOrder.trim() ? Number(entityNameSortOrder) : null,
           start_date: entityNameStartDate || null,
           end_date: entityNameEndDate || null
         },
@@ -326,6 +402,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
       if (selectedNodeId) {
         queryClient.invalidateQueries({ queryKey: ["graph:entity-detail", graphId, selectedNodeId] })
       }
+      setNameFormBaseline(buildNameFormSignature())
     }
   })
 
@@ -362,20 +439,41 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
     }
   })
 
+  const deleteNodeMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedNode) {
+        throw new Error("No node selected")
+      }
+      await deleteGraphEntity(graphId, selectedNode.id)
+    },
+    onSuccess: () => {
+      setGraphRefreshKey((previous) => previous + 1)
+      queryClient.invalidateQueries({ queryKey: ["graph:entities", graphId] })
+      setSelectedNodeId(null)
+      setSelectedEdge(null)
+      setRightPanelMode(null)
+      setSourceNodeId(null)
+    }
+  })
+
   const createLinkMutation = useMutation({
     mutationFn: async () => {
+      const effectiveRelationshipType = createLinkRelationshipTypeValue.trim()
+      const effectiveSourceRole = createLinkSourceRoleValue.trim()
+      const effectiveTargetRole = createLinkTargetRoleValue.trim()
+
       if (!sourceEntityId) {
         throw new Error("Source required")
       }
-      if (!newLinkType.trim()) {
+      if (!effectiveRelationshipType) {
         throw new Error("Type required")
       }
-      if (!newLinkFromRole.trim() || !newLinkToRole.trim()) {
+      if (!effectiveSourceRole || !effectiveTargetRole) {
         throw new Error("Roles required")
       }
-      const startDate = new Date(newLinkStart)
+      const startDate = newLinkStart ? new Date(newLinkStart) : new Date(DEFAULT_RELATIONSHIP_START)
       if (Number.isNaN(startDate.getTime())) {
-        throw new Error("Start required")
+        throw new Error("Start invalid")
       }
       const endDate = newLinkEnd ? new Date(newLinkEnd) : null
       if (endDate && Number.isNaN(endDate.getTime())) {
@@ -397,10 +495,10 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
       }
 
       const relationship = await createRelationship(graphId, {
-        relationship_type: newLinkType.trim(),
+        relationship_type: effectiveRelationshipType,
         participants: [
-          { entity_id: sourceEntityId, role: newLinkFromRole.trim() },
-          { entity_id: toEntityId, role: newLinkToRole.trim() }
+          { entity_id: sourceEntityId, role: effectiveSourceRole },
+          { entity_id: toEntityId, role: effectiveTargetRole }
         ]
       })
 
@@ -412,10 +510,16 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
     onSuccess: () => {
       setGraphRefreshKey((previous) => previous + 1)
       queryClient.invalidateQueries({ queryKey: ["graph:entities", graphId] })
+      if (sourceEntityId) {
+        setFocusOverride(sourceEntityId)
+        setSelectedNodeId(sourceEntityId)
+      }
+      setSelectedEdge(null)
       setNewLinkedName("")
       setNewLinkType("")
       setNewLinkFromRole("")
       setNewLinkToRole("")
+      setNewLinkStart("")
       setNewLinkEnd("")
     }
   })
@@ -435,6 +539,116 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
     createLinkMutation.mutate()
   }
 
+  function onCreateLinkTypeChange(nextType: string) {
+    setNewLinkType(nextType)
+    const nextRelationshipType = relationshipTypes.find((type) => type.code === nextType)
+    if (!nextRelationshipType) {
+      return
+    }
+    if (nextRelationshipType.source_roles.length > 0 && !nextRelationshipType.source_roles.includes(newLinkFromRole)) {
+      setNewLinkFromRole(nextRelationshipType.source_roles[0])
+    }
+    if (nextRelationshipType.target_roles.length > 0 && !nextRelationshipType.target_roles.includes(newLinkToRole)) {
+      const preferredTargetRole =
+        nextRelationshipType.target_roles.length > 1
+          ? nextRelationshipType.target_roles.find((role) => role !== nextRelationshipType.source_roles[0])
+          : undefined
+      setNewLinkToRole(preferredTargetRole ?? nextRelationshipType.target_roles[0])
+    }
+  }
+
+  function onEdgeTypeChange(nextType: string) {
+    setEdgeType(nextType)
+    const nextRelationshipType = relationshipTypes.find((type) => type.code === nextType)
+    if (!nextRelationshipType) {
+      return
+    }
+    if (nextRelationshipType.source_roles.length > 0 && !nextRelationshipType.source_roles.includes(edgeFromRole)) {
+      setEdgeFromRole(nextRelationshipType.source_roles[0])
+    }
+    if (nextRelationshipType.target_roles.length > 0 && !nextRelationshipType.target_roles.includes(edgeToRole)) {
+      const preferredTargetRole =
+        nextRelationshipType.target_roles.length > 1
+          ? nextRelationshipType.target_roles.find((role) => role !== nextRelationshipType.source_roles[0])
+          : undefined
+      setEdgeToRole(preferredTargetRole ?? nextRelationshipType.target_roles[0])
+    }
+  }
+
+  function buildNameFormSignature() {
+    return JSON.stringify({
+      name_text: entityNameText,
+      language_code: entityNameLanguage,
+      is_primary: entityNameIsPrimary,
+      start_date: entityNameStartDate,
+      end_date: entityNameEndDate
+    })
+  }
+
+  function resolveNameForType(
+    nameType: (typeof NAME_TYPE_OPTIONS)[number],
+    names: EntityNameRecord[]
+  ): EntityNameRecord | undefined {
+    const exact = names.find((name) => name.name_type === nameType)
+    if (exact) {
+      return exact
+    }
+    if (nameType === "legal") {
+      return names.find((name) => name.name_type === "preferred")
+    }
+    return undefined
+  }
+
+  function applyEntityNameForType(
+    nameType: (typeof NAME_TYPE_OPTIONS)[number],
+    names: EntityNameRecord[],
+    fallbackDisplayName: string
+  ) {
+    const selectedName = resolveNameForType(nameType, names)
+    setEntityNameType(nameType)
+    setEntityNameText(selectedName?.name_text ?? "")
+    setEntityNameLanguage(selectedName?.language_code ?? "")
+    setEntityNameIsPrimary(selectedName?.is_primary ?? false)
+    setEntityNameStartDate(toDateInputValue(selectedName?.start_date))
+    setEntityNameEndDate(toDateInputValue(selectedName?.end_date))
+
+    // If no names exist yet, seed from current display text.
+    if (names.length === 0) {
+      setEntityNameText(fallbackDisplayName)
+      setEntityNameIsPrimary(true)
+    }
+
+    // If the entity already has saved names, primary should mirror the selected type's saved record.
+    if (names.length > 0 && !selectedName) {
+      setEntityNameIsPrimary(false)
+    }
+  }
+
+  function onEntityNameTypeChange(nextType: (typeof NAME_TYPE_OPTIONS)[number]) {
+    if (nextType === entityNameType) {
+      return
+    }
+    if (nameFormBaseline && buildNameFormSignature() !== nameFormBaseline) {
+      const shouldDiscard = window.confirm(
+        "You have unsaved name changes. Switch name type and discard unsaved changes?"
+      )
+      if (!shouldDiscard) {
+        return
+      }
+    }
+    applyEntityNameForType(nextType, entityNamesByType, "")
+    const selectedName = resolveNameForType(nextType, entityNamesByType)
+    setNameFormBaseline(
+      JSON.stringify({
+        name_text: selectedName?.name_text ?? "",
+        language_code: selectedName?.language_code ?? "",
+        is_primary: selectedName?.is_primary ?? false,
+        start_date: toDateInputValue(selectedName?.start_date),
+        end_date: toDateInputValue(selectedName?.end_date)
+      })
+    )
+  }
+
   const showNodeEditor = rightPanelMode === "node" && selectedNode !== null
   const showEdgeEditor = rightPanelMode === "edge" && selectedEdge !== null
   const showLinkEditor = rightPanelMode === "link"
@@ -446,17 +660,26 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
         queryKey: ["graph:entity-detail", graphId, nodeId],
         queryFn: () => fetchGraphEntityDetail(graphId, nodeId)
       })
-      setNodeName(detail.display_name)
       setNodeKind(detail.entity_kind)
-      setEntityNameText(detail.entity_name?.name_text ?? detail.display_name)
-      setEntityNameType(detail.entity_name?.name_type ?? "preferred")
-      setEntityNameLanguage(detail.entity_name?.language_code ?? "")
-      setEntityNameScript(detail.entity_name?.script_code ?? "")
-      setEntityNameNotes(detail.entity_name?.notes ?? "")
-      setEntityNameIsPrimary(detail.entity_name?.is_primary ?? true)
-      setEntityNameSortOrder(detail.entity_name?.sort_order === null || detail.entity_name?.sort_order === undefined ? "" : String(detail.entity_name.sort_order))
-      setEntityNameStartDate(toDateInputValue(detail.entity_name?.start_date))
-      setEntityNameEndDate(toDateInputValue(detail.entity_name?.end_date))
+      const names = detail.entity_names ?? (detail.entity_name ? [detail.entity_name] : [])
+      setEntityNamesByType(names)
+      const preferredTypeRaw = detail.entity_name?.name_type
+      const preferredType = NAME_TYPE_OPTIONS.includes(preferredTypeRaw as (typeof NAME_TYPE_OPTIONS)[number])
+        ? (preferredTypeRaw as (typeof NAME_TYPE_OPTIONS)[number])
+        : preferredTypeRaw === "preferred"
+          ? "legal"
+        : "legal"
+      applyEntityNameForType(preferredType, names, detail.display_name)
+      const selectedName = resolveNameForType(preferredType, names)
+      setNameFormBaseline(
+        JSON.stringify({
+          name_text: selectedName?.name_text ?? (names.length === 0 ? detail.display_name : ""),
+          language_code: selectedName?.language_code ?? "",
+          is_primary: selectedName?.is_primary ?? (names.length === 0),
+          start_date: toDateInputValue(selectedName?.start_date),
+          end_date: toDateInputValue(selectedName?.end_date)
+        })
+      )
 
       if (detail.entity_kind === "person") {
         const profile = (detail.profile ?? {}) as Record<string, unknown>
@@ -504,7 +727,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
     <Section className="mb-0">
       <Stack className="gap-3">
         <label className="block">
-          <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Focus</span>
+          <FieldLabel>Focus</FieldLabel>
           <Select
             value={focusEntityId ?? ""}
             onChange={(event) => {
@@ -528,12 +751,12 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
           </Select>
         </label>
 
-        <TimeSlider asOf={asOf} onChange={setAsOf} />
+        {!TEMPORAL_SIMPLE_MODE ? <TimeSlider asOf={asOf} onChange={setAsOf} /> : null}
 
         <Stack className="gap-2">
           <ToggleRow label="Node labels" checked={showNodeLabels} onChange={setShowNodeLabels} />
           <ToggleRow label="Edge labels" checked={showRelationshipLabels} onChange={setShowRelationshipLabels} />
-          <ToggleRow label="Inactive" checked={includeInactive} onChange={setIncludeInactive} />
+          {!TEMPORAL_SIMPLE_MODE ? <ToggleRow label="Inactive" checked={includeInactive} onChange={setIncludeInactive} /> : null}
         </Stack>
       </Stack>
     </Section>
@@ -547,11 +770,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
             <form onSubmit={onSaveNode}>
               <Stack className="gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Display label</span>
-                  <Input value={nodeName} onChange={(event) => setNodeName(event.target.value)} required />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Entity kind</span>
+                  <FieldLabel compact>Node type</FieldLabel>
                   <Select value={nodeKind} onChange={(event) => setNodeKind(event.target.value as "person" | "animal" | "place")}>
                     <option value="person">person</option>
                     <option value="animal">animal</option>
@@ -560,31 +779,22 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
                 </label>
 
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Entity name text</span>
+                  <FieldLabel compact>Name type</FieldLabel>
+                  <Select
+                    value={entityNameType}
+                    onChange={(event) => onEntityNameTypeChange(event.target.value as (typeof NAME_TYPE_OPTIONS)[number])}
+                  >
+                    {NAME_TYPE_OPTIONS.map((nameType) => (
+                      <option key={nameType} value={nameType}>{nameType}</option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Name</FieldLabel>
                   <Input value={entityNameText} onChange={(event) => setEntityNameText(event.target.value)} required />
                 </label>
-                <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Entity name type</span>
-                  <Input value={entityNameType} onChange={(event) => setEntityNameType(event.target.value)} placeholder="preferred" />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Entity name language</span>
-                  <Input value={entityNameLanguage} onChange={(event) => setEntityNameLanguage(event.target.value)} placeholder="en" />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Entity name script</span>
-                  <Input value={entityNameScript} onChange={(event) => setEntityNameScript(event.target.value)} placeholder="Latn" />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Entity name notes</span>
-                  <Input value={entityNameNotes} onChange={(event) => setEntityNameNotes(event.target.value)} />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Entity name sort order</span>
-                  <Input type="number" value={entityNameSortOrder} onChange={(event) => setEntityNameSortOrder(event.target.value)} />
-                </label>
                 <label className="flex items-center justify-between gap-3 rounded-md border border-[var(--console-border)] bg-[var(--console-subpanel)] px-2 py-1.5">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Primary entity name</span>
+                  <FieldLabel compact>Primary Name</FieldLabel>
                   <input
                     type="checkbox"
                     checked={entityNameIsPrimary}
@@ -593,34 +803,50 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
                   />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Name active from</span>
+                  <FieldLabel compact>Name Language</FieldLabel>
+                  <Select value={entityNameLanguage} onChange={(event) => setEntityNameLanguage(event.target.value)}>
+                    {NAME_LANGUAGE_OPTIONS.map((language) => (
+                      <option key={language.value || "unspecified"} value={language.value}>{language.label}</option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Name active from</FieldLabel>
                   <Input type="date" value={entityNameStartDate} onChange={(event) => setEntityNameStartDate(event.target.value)} />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Name active until</span>
+                  <FieldLabel compact>Name active until</FieldLabel>
                   <Input type="date" value={entityNameEndDate} onChange={(event) => setEntityNameEndDate(event.target.value)} />
                 </label>
 
                 {nodeKind === "person" ? (
                   <>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Birth date</span>
+                      <FieldLabel compact>Birth date</FieldLabel>
                       <Input type="date" value={personProfile.birth_date} onChange={(event) => setPersonProfile((value) => ({ ...value, birth_date: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Death date</span>
+                      <FieldLabel compact>Death date</FieldLabel>
                       <Input type="date" value={personProfile.death_date} onChange={(event) => setPersonProfile((value) => ({ ...value, death_date: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Sex at birth</span>
-                      <Input value={personProfile.sex_at_birth} onChange={(event) => setPersonProfile((value) => ({ ...value, sex_at_birth: event.target.value }))} />
+                      <FieldLabel compact>Sex at Birth</FieldLabel>
+                      <Select value={personProfile.sex_at_birth} onChange={(event) => setPersonProfile((value) => ({ ...value, sex_at_birth: event.target.value }))}>
+                        {SEX_AT_BIRTH_OPTIONS.map((value) => (
+                          <option key={value || "unspecified"} value={value}>{value || "Unspecified"}</option>
+                        ))}
+                      </Select>
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Gender identity</span>
-                      <Input value={personProfile.gender_identity} onChange={(event) => setPersonProfile((value) => ({ ...value, gender_identity: event.target.value }))} />
+                      <FieldLabel compact>Gender Identity</FieldLabel>
+                      <Select value={personProfile.gender_identity} onChange={(event) => setPersonProfile((value) => ({ ...value, gender_identity: event.target.value }))}>
+                        {GENDER_IDENTITY_OPTIONS.map((value) => (
+                          <option key={value || "unspecified"} value={value}>{value || "Unspecified"}</option>
+                        ))}
+                      </Select>
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Profile notes</span>
+                      <FieldLabel compact>Profile notes</FieldLabel>
                       <Input value={personProfile.notes} onChange={(event) => setPersonProfile((value) => ({ ...value, notes: event.target.value }))} />
                     </label>
                   </>
@@ -629,31 +855,31 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
                 {nodeKind === "animal" ? (
                   <>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Species</span>
+                      <FieldLabel compact>Species</FieldLabel>
                       <Input value={animalProfile.species} onChange={(event) => setAnimalProfile((value) => ({ ...value, species: event.target.value }))} required />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Breed</span>
+                      <FieldLabel compact>Breed</FieldLabel>
                       <Input value={animalProfile.breed} onChange={(event) => setAnimalProfile((value) => ({ ...value, breed: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Sex</span>
+                      <FieldLabel compact>Sex</FieldLabel>
                       <Input value={animalProfile.sex} onChange={(event) => setAnimalProfile((value) => ({ ...value, sex: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Reproductive status</span>
+                      <FieldLabel compact>Reproductive status</FieldLabel>
                       <Input value={animalProfile.reproductive_status} onChange={(event) => setAnimalProfile((value) => ({ ...value, reproductive_status: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Birth date</span>
+                      <FieldLabel compact>Birth date</FieldLabel>
                       <Input type="date" value={animalProfile.birth_date} onChange={(event) => setAnimalProfile((value) => ({ ...value, birth_date: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Death date</span>
+                      <FieldLabel compact>Death date</FieldLabel>
                       <Input type="date" value={animalProfile.death_date} onChange={(event) => setAnimalProfile((value) => ({ ...value, death_date: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Profile notes</span>
+                      <FieldLabel compact>Profile notes</FieldLabel>
                       <Input value={animalProfile.notes} onChange={(event) => setAnimalProfile((value) => ({ ...value, notes: event.target.value }))} />
                     </label>
                   </>
@@ -662,38 +888,53 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
                 {nodeKind === "place" ? (
                   <>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Place type</span>
+                      <FieldLabel compact>Place type</FieldLabel>
                       <Input value={placeProfile.place_type} onChange={(event) => setPlaceProfile((value) => ({ ...value, place_type: event.target.value }))} required />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Built date</span>
+                      <FieldLabel compact>Built date</FieldLabel>
                       <Input type="date" value={placeProfile.built_date} onChange={(event) => setPlaceProfile((value) => ({ ...value, built_date: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Demolished date</span>
+                      <FieldLabel compact>Demolished date</FieldLabel>
                       <Input type="date" value={placeProfile.demolished_date} onChange={(event) => setPlaceProfile((value) => ({ ...value, demolished_date: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Latitude</span>
+                      <FieldLabel compact>Latitude</FieldLabel>
                       <Input type="number" step="any" value={placeProfile.lat} onChange={(event) => setPlaceProfile((value) => ({ ...value, lat: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Longitude</span>
+                      <FieldLabel compact>Longitude</FieldLabel>
                       <Input type="number" step="any" value={placeProfile.lng} onChange={(event) => setPlaceProfile((value) => ({ ...value, lng: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Address</span>
+                      <FieldLabel compact>Address</FieldLabel>
                       <Input value={placeProfile.address_text} onChange={(event) => setPlaceProfile((value) => ({ ...value, address_text: event.target.value }))} />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Profile notes</span>
+                      <FieldLabel compact>Profile notes</FieldLabel>
                       <Input value={placeProfile.notes} onChange={(event) => setPlaceProfile((value) => ({ ...value, notes: event.target.value }))} />
                     </label>
                   </>
                 ) : null}
 
                 <Button type="submit" disabled={saveNodeMutation.isPending || isNodeDetailLoading}>Save node</Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  disabled={deleteNodeMutation.isPending}
+                  onClick={() => {
+                    const confirmed = window.confirm("Delete this node? This also deletes connected relationships.")
+                    if (!confirmed) {
+                      return
+                    }
+                    deleteNodeMutation.mutate()
+                  }}
+                >
+                  Delete node
+                </Button>
                 {saveNodeMutation.error ? <Card variant="danger" className="px-3 py-2 text-xs">Save failed</Card> : null}
+                {deleteNodeMutation.error ? <Card variant="danger" className="px-3 py-2 text-xs">Delete failed</Card> : null}
               </Stack>
             </form>
           </FormContainer>
@@ -706,28 +947,43 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
             <form onSubmit={onSaveEdge}>
               <Stack className="gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Relationship type</span>
-                  <Select value={edgeType} onChange={(event) => setEdgeType(event.target.value)} required>
-                    <option value="">Select relationship type</option>
+                  <FieldLabel compact>Relationship type</FieldLabel>
+                  <Select value={edgeRelationshipTypeValue} onChange={(event) => onEdgeTypeChange(event.target.value)} required>
                     {relationshipTypes.map((type) => (
                       <option key={type.code} value={type.code}>{type.display_name || type.code}</option>
                     ))}
                   </Select>
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Source node role</span>
-                  <Input value={edgeFromRole} onChange={(event) => setEdgeFromRole(event.target.value)} required />
+                  <FieldLabel compact>Source node role</FieldLabel>
+                  {edgeSourceRoleOptions.length > 0 ? (
+                    <Select value={edgeFromRole} onChange={(event) => setEdgeFromRole(event.target.value)} required>
+                      {edgeSourceRoleOptions.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input value={edgeFromRole} onChange={(event) => setEdgeFromRole(event.target.value)} required />
+                  )}
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Target node role</span>
-                  <Input value={edgeToRole} onChange={(event) => setEdgeToRole(event.target.value)} required />
+                  <FieldLabel compact>Target node role</FieldLabel>
+                  {edgeTargetRoleOptions.length > 0 ? (
+                    <Select value={edgeToRole} onChange={(event) => setEdgeToRole(event.target.value)} required>
+                      {edgeTargetRoleOptions.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input value={edgeToRole} onChange={(event) => setEdgeToRole(event.target.value)} required />
+                  )}
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Relationship active from</span>
+                  <FieldLabel compact>Relationship active from</FieldLabel>
                   <Input type="datetime-local" value={edgeStart} onChange={(event) => setEdgeStart(event.target.value)} required />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Relationship active until</span>
+                  <FieldLabel compact>Relationship active until</FieldLabel>
                   <Input type="datetime-local" value={edgeEnd} onChange={(event) => setEdgeEnd(event.target.value)} />
                 </label>
                 <Button type="submit" disabled={saveEdgeMutation.isPending}>Save edge</Button>
@@ -744,14 +1000,14 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
             <form onSubmit={onCreateLink}>
               <Stack className="gap-3">
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Link action</span>
+                  <FieldLabel compact>Link action</FieldLabel>
                   <Select value={createMode} onChange={(event) => setCreateMode(event.target.value as CreateMode)}>
                     <option value="new_node">Create linked node</option>
                     <option value="existing_node">Link existing node</option>
                   </Select>
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Source node</span>
+                  <FieldLabel compact>Source node</FieldLabel>
                   <Select value={sourceEntityId} onChange={(event) => setSourceNodeId(event.target.value || null)} required>
                     <option value=""></option>
                     {entities.map((entity) => (
@@ -765,11 +1021,11 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
                 {createMode === "new_node" ? (
                   <>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">New node label</span>
+                      <FieldLabel compact>New node label</FieldLabel>
                       <Input value={newLinkedName} onChange={(event) => setNewLinkedName(event.target.value)} required />
                     </label>
                     <label className="block">
-                      <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">New node kind</span>
+                      <FieldLabel compact>New node kind</FieldLabel>
                       <Select
                         value={newLinkedKind}
                         onChange={(event) => setNewLinkedKind(event.target.value as "person" | "animal" | "place")}
@@ -782,7 +1038,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
                   </>
                 ) : (
                   <label className="block">
-                    <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Target node</span>
+                    <FieldLabel compact>Target node</FieldLabel>
                     <Select value={targetEntityId} onChange={(event) => setExistingTargetId(event.target.value || null)} required>
                       <option value=""></option>
                       {entities
@@ -797,32 +1053,51 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
                 )}
 
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Relationship type</span>
-                  <Select value={newLinkType} onChange={(event) => setNewLinkType(event.target.value)} required>
-                    <option value="">Select relationship type</option>
+                  <FieldLabel compact>Relationship type</FieldLabel>
+                  <Select value={createLinkRelationshipTypeValue} onChange={(event) => onCreateLinkTypeChange(event.target.value)} required>
                     {relationshipTypes.map((type) => (
                       <option key={type.code} value={type.code}>{type.display_name || type.code}</option>
                     ))}
                   </Select>
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Source node role</span>
-                  <Input value={newLinkFromRole} onChange={(event) => setNewLinkFromRole(event.target.value)} required />
+                  <FieldLabel compact>Source node role</FieldLabel>
+                  {createLinkSourceRoleOptions.length > 0 ? (
+                    <Select value={createLinkSourceRoleValue} onChange={(event) => setNewLinkFromRole(event.target.value)} required>
+                      {createLinkSourceRoleOptions.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input value={newLinkFromRole} onChange={(event) => setNewLinkFromRole(event.target.value)} required />
+                  )}
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Target node role</span>
-                  <Input value={newLinkToRole} onChange={(event) => setNewLinkToRole(event.target.value)} required />
+                  <FieldLabel compact>Target node role</FieldLabel>
+                  {createLinkTargetRoleOptions.length > 0 ? (
+                    <Select value={createLinkTargetRoleValue} onChange={(event) => setNewLinkToRole(event.target.value)} required>
+                      {createLinkTargetRoleOptions.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input value={newLinkToRole} onChange={(event) => setNewLinkToRole(event.target.value)} required />
+                  )}
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Relationship active from</span>
-                  <Input type="datetime-local" value={newLinkStart} onChange={(event) => setNewLinkStart(event.target.value)} required />
+                  <FieldLabel compact>Relationship active from</FieldLabel>
+                  <Input type="datetime-local" value={newLinkStart} onChange={(event) => setNewLinkStart(event.target.value)} />
                 </label>
                 <label className="block">
-                  <span className="text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">Relationship active until</span>
+                  <FieldLabel compact>Relationship active until</FieldLabel>
                   <Input type="datetime-local" value={newLinkEnd} onChange={(event) => setNewLinkEnd(event.target.value)} />
                 </label>
                 <Button type="submit" disabled={createLinkMutation.isPending}>Create link</Button>
-                {createLinkMutation.error ? <Card variant="danger" className="px-3 py-2 text-xs">Create failed</Card> : null}
+                {createLinkMutation.error ? (
+                  <Card variant="danger" className="px-3 py-2 text-xs">
+                    {(createLinkMutation.error as Error).message}
+                  </Card>
+                ) : null}
               </Stack>
             </form>
           </FormContainer>
@@ -865,9 +1140,21 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
       }}
       onAddLinkedNodeFrom={(nodeId) => {
         setSourceNodeId(nodeId)
+        setFocusOverride(nodeId)
         setSelectedNodeId(nodeId)
         setSelectedEdge(null)
         setCreateMode("new_node")
+        setNewLinkStart("")
+        if (relationshipTypes.length > 0) {
+          const defaultType = relationshipTypes[0]
+          setNewLinkType(defaultType.code)
+          if (defaultType.source_roles.length > 0) {
+            setNewLinkFromRole(defaultType.source_roles[0])
+          }
+          if (defaultType.target_roles.length > 0) {
+            setNewLinkToRole(defaultType.target_roles[0])
+          }
+        }
         setRightPanelMode("link")
         setRightExpanded(true)
       }}

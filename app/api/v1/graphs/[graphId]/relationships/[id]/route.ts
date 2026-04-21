@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+
 import { and, eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
 
@@ -18,6 +20,20 @@ type UpdateRelationshipRequest = {
 
 type RouteContext = {
   params: Promise<{ graphId: string; id: string }>
+}
+
+const RELATIONSHIP_TYPE_PRESETS: Record<
+  string,
+  { displayName: string; isDirected: boolean; category: string | null }
+> = {
+  parent_child: { displayName: "Parent-Child", isDirected: true, category: "family" },
+  romantic: { displayName: "Romantic", isDirected: false, category: "relationship" },
+  animal: { displayName: "Animal", isDirected: false, category: "animal" },
+  sibling: { displayName: "Sibling", isDirected: false, category: "family" }
+}
+
+function normalizeRelationshipTypeCode(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, "_")
 }
 
 export async function PATCH(request: Request, context: RouteContext): Promise<NextResponse> {
@@ -57,11 +73,35 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Ne
 
   if (body.relationship_type?.trim()) {
     const code = body.relationship_type.trim()
-    const [typeRecord] = await db
+    let [typeRecord] = await db
       .select({ id: relationshipType.id })
       .from(relationshipType)
       .where(eq(relationshipType.code, code))
       .limit(1)
+
+    if (!typeRecord) {
+      const normalizedCode = normalizeRelationshipTypeCode(code)
+      const preset = RELATIONSHIP_TYPE_PRESETS[normalizedCode]
+      if (preset) {
+        await db
+          .insert(relationshipType)
+          .values({
+            id: randomUUID(),
+            code: normalizedCode,
+            displayName: preset.displayName,
+            isDirected: preset.isDirected,
+            category: preset.category,
+            allowsMultipleParticipants: false
+          })
+          .onConflictDoNothing()
+
+        ;[typeRecord] = await db
+          .select({ id: relationshipType.id })
+          .from(relationshipType)
+          .where(eq(relationshipType.code, normalizedCode))
+          .limit(1)
+      }
+    }
 
     if (!typeRecord) {
       return jsonError(400, "relationship_type_not_found", "Unknown relationship_type", {

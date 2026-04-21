@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto"
 
-import { and, asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, inArray } from "drizzle-orm"
 import { NextResponse } from "next/server"
 
 import { getDb } from "@/db/client"
-import { animalProfile, entity, entityName, personProfile, placeProfile } from "@/db/schema"
+import { animalProfile, entity, entityName, personProfile, placeProfile, relationship, relationshipParticipant } from "@/db/schema"
 import { requireApiGraphAccess } from "@/server/api/auth"
 import { requireCsrfProtection } from "@/server/api/csrf"
 import { isJsonRequest, jsonError } from "@/server/api/http"
@@ -84,14 +84,6 @@ function cleanNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function cleanInteger(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") {
-    return null
-  }
-  const parsed = Number(value)
-  return Number.isInteger(parsed) ? parsed : null
-}
-
 async function buildEntityDetail(graphId: string, id: string): Promise<NextResponse | null> {
   const db = getDb()
   const [entityRow] = await db
@@ -108,7 +100,7 @@ async function buildEntityDetail(graphId: string, id: string): Promise<NextRespo
     return null
   }
 
-  const [nameRow] = await db
+  const nameRows = await db
     .select({
       name_text: entityName.nameText,
       name_type: entityName.nameType,
@@ -123,7 +115,6 @@ async function buildEntityDetail(graphId: string, id: string): Promise<NextRespo
     .from(entityName)
     .where(eq(entityName.entityId, id))
     .orderBy(desc(entityName.isPrimary), asc(entityName.sortOrder), asc(entityName.id))
-    .limit(1)
 
   let profile: Record<string, unknown> | null = null
   if (entityRow.entity_kind === "person") {
@@ -173,7 +164,8 @@ async function buildEntityDetail(graphId: string, id: string): Promise<NextRespo
 
   return NextResponse.json({
     ...entityRow,
-    entity_name: nameRow ?? null,
+    entity_name: nameRows[0] ?? null,
+    entity_names: nameRows,
     profile
   })
 }
@@ -227,15 +219,18 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Ne
     return jsonError(404, "entity_not_found", "Entity not found", { id })
   }
 
-  const updates: { entityKind?: "person" | "animal" | "place"; canonicalDisplayName?: string } = {}
+  const updates: { entityKind?: "person" | "animal" | "place" } = {}
   if (body.entity_kind) {
     updates.entityKind = body.entity_kind
   }
-  if (typeof body.display_name === "string" && body.display_name.trim()) {
-    updates.canonicalDisplayName = body.display_name.trim()
-  }
 
-  const isUpdatingName = body.entity_name !== undefined
+  const normalizedEntityNameInput: EntityNameInput | undefined =
+    body.entity_name ??
+    (typeof body.display_name === "string" && body.display_name.trim()
+      ? { name_text: body.display_name }
+      : undefined)
+
+  const isUpdatingName = normalizedEntityNameInput !== undefined
   const isUpdatingProfile = body.profile !== undefined
   if (Object.keys(updates).length === 0 && !isUpdatingName && !isUpdatingProfile) {
     return jsonError(400, "invalid_request", "At least one editable field is required")
@@ -265,27 +260,32 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Ne
       }
 
       if (isUpdatingName) {
-        const nameText = cleanText(body.entity_name?.name_text)
+        const nameText = cleanText(normalizedEntityNameInput?.name_text)
         if (!nameText) {
           throw new Error("entity_name.name_text is required when entity_name is provided")
         }
+        const targetNameType = cleanText(normalizedEntityNameInput?.name_type) ?? "legal"
         const [existingName] = await tx
           .select({ id: entityName.id })
           .from(entityName)
-          .where(eq(entityName.entityId, id))
+          .where(and(eq(entityName.entityId, id), eq(entityName.nameType, targetNameType)))
           .orderBy(desc(entityName.isPrimary), asc(entityName.sortOrder), asc(entityName.id))
           .limit(1)
 
+        if (normalizedEntityNameInput?.is_primary) {
+          await tx
+            .update(entityName)
+            .set({ isPrimary: false })
+            .where(eq(entityName.entityId, id))
+        }
+
         const nameValues = {
           nameText,
-          nameType: cleanText(body.entity_name?.name_type) ?? "preferred",
-          languageCode: cleanText(body.entity_name?.language_code),
-          scriptCode: cleanText(body.entity_name?.script_code),
-          notes: cleanText(body.entity_name?.notes),
-          isPrimary: body.entity_name?.is_primary ?? true,
-          sortOrder: cleanInteger(body.entity_name?.sort_order),
-          startDate: cleanDate(body.entity_name?.start_date),
-          endDate: cleanDate(body.entity_name?.end_date)
+          nameType: targetNameType,
+          languageCode: cleanText(normalizedEntityNameInput?.language_code),
+          isPrimary: normalizedEntityNameInput?.is_primary ?? true,
+          startDate: cleanDate(normalizedEntityNameInput?.start_date),
+          endDate: cleanDate(normalizedEntityNameInput?.end_date)
         }
 
         if (existingName) {
@@ -390,4 +390,45 @@ export async function PATCH(request: Request, context: RouteContext): Promise<Ne
     return jsonError(404, "entity_not_found", "Entity not found", { id })
   }
   return response
+}
+
+export async function DELETE(request: Request, context: RouteContext): Promise<NextResponse> {
+  const csrfError = requireCsrfProtection(request)
+  if (csrfError) {
+    return csrfError
+  }
+
+  const { graphId, id } = await context.params
+  const auth = await requireApiGraphAccess(graphId)
+  if (!auth.user) {
+    return auth.response
+  }
+
+  const db = getDb()
+  const [existingEntity] = await db
+    .select({ id: entity.id })
+    .from(entity)
+    .where(and(eq(entity.id, id), eq(entity.graphId, graphId)))
+    .limit(1)
+
+  if (!existingEntity) {
+    return jsonError(404, "entity_not_found", "Entity not found", { id })
+  }
+
+  await db.transaction(async (tx) => {
+    const relationshipRows = await tx
+      .select({ relationship_id: relationship.id })
+      .from(relationshipParticipant)
+      .innerJoin(relationship, eq(relationshipParticipant.relationshipId, relationship.id))
+      .where(and(eq(relationship.graphId, graphId), eq(relationshipParticipant.entityId, id)))
+
+    const relationshipIds = [...new Set(relationshipRows.map((row) => row.relationship_id))]
+    if (relationshipIds.length > 0) {
+      await tx.delete(relationship).where(inArray(relationship.id, relationshipIds))
+    }
+
+    await tx.delete(entity).where(and(eq(entity.id, id), eq(entity.graphId, graphId)))
+  })
+
+  return NextResponse.json({ ok: true })
 }

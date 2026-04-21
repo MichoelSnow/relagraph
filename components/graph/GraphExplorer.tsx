@@ -77,9 +77,14 @@ export default function GraphExplorer({
       })
   })
 
-  const scopedExpandedGraph =
-    expandedState.scopeKey === scopeKey ? expandedState.graph : EMPTY_GRAPH_STATE
-  const baseGraph = viewQuery.data ? toGraphState(viewQuery.data) : EMPTY_GRAPH_STATE
+  const scopedExpandedGraph = useMemo(
+    () => (expandedState.scopeKey === scopeKey ? expandedState.graph : EMPTY_GRAPH_STATE),
+    [expandedState, scopeKey]
+  )
+  const baseGraph = useMemo(
+    () => (viewQuery.data ? toGraphState(viewQuery.data) : EMPTY_GRAPH_STATE),
+    [viewQuery.data]
+  )
   const graphState = useMemo(
     () => mergeGraphState(baseGraph, scopedExpandedGraph),
     [baseGraph, scopedExpandedGraph]
