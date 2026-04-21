@@ -34,18 +34,28 @@ Base path:
 - Session cookie is set by auth endpoints.
 - Protected endpoints return `401` when no valid session exists.
 - Graph-scoped endpoints return `404` when graph access is denied/not found.
+- State-changing endpoints require an `Origin` header that matches the request host (CSRF protection).
+- Public write endpoints are rate limited and may return `429` with a `Retry-After` header.
 
 ---
 
 ## Auth
 
+### `next-auth` routes (`/api/auth/*`)
+Session authentication is handled by NextAuth credentials provider.
+
+Used routes:
+- `POST /api/auth/callback/credentials` (login via credentials)
+- `POST /api/auth/signout` (logout)
+- `GET /api/auth/session` (session inspection)
+
 ### POST `/auth/register`
-Create a user account and establish a session.
+Create a user account.
 
 Request:
 ```json
 {
-  "email": "user@example.com",
+  "username": "user@example.com-or-handle",
   "password": "min-8-chars"
 }
 ```
@@ -54,36 +64,7 @@ Response (`201`):
 ```json
 {
   "id": "uuid",
-  "email": "user@example.com"
-}
-```
-
-### POST `/auth/login`
-Authenticate and establish a session.
-
-Request:
-```json
-{
-  "email": "user@example.com",
-  "password": "string"
-}
-```
-
-Response (`200`):
-```json
-{
-  "id": "uuid",
-  "email": "user@example.com"
-}
-```
-
-### POST `/auth/logout`
-Revoke current session and clear cookie.
-
-Response (`200`):
-```json
-{
-  "ok": true
+  "username": "user@example.com-or-handle"
 }
 ```
 
@@ -94,7 +75,7 @@ Response (`200`):
 ```json
 {
   "id": "uuid",
-  "email": "user@example.com"
+  "username": "user@example.com-or-handle"
 }
 ```
 
@@ -236,6 +217,17 @@ Response (`201`):
 }
 ```
 
+### PATCH `/graphs/:graphId/entities/:id`
+Update editable entity fields in one graph.
+
+Request:
+```json
+{
+  "display_name": "Alex Updated",
+  "entity_kind": "person"
+}
+```
+
 ---
 
 ## Relationships
@@ -283,6 +275,20 @@ Response (`201`):
   "relationship_id": "uuid",
   "start": "2020-01-01T00:00:00Z",
   "end": null
+}
+```
+
+### PATCH `/graphs/:graphId/relationships/:id`
+Update relationship type and participant roles in one graph.
+
+Request:
+```json
+{
+  "relationship_type": "familial",
+  "participants": [
+    { "entity_id": "uuid", "role": "parent" },
+    { "entity_id": "uuid", "role": "child" }
+  ]
 }
 ```
 

@@ -3,28 +3,53 @@
 import { useMutation } from "@tanstack/react-query"
 import { FormEvent, useState } from "react"
 import { useRouter } from "next/navigation"
+import { signIn } from "next-auth/react"
 
-import { login, register } from "@/lib/api/auth"
+import { register } from "@/lib/api/auth"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import Card from "@/components/ui/Card"
+import FieldLabel from "@/components/ui/FieldLabel"
+import FormContainer from "@/components/ui/FormContainer"
 import Input from "@/components/ui/Input"
+import PageHeader from "@/components/ui/PageHeader"
+import PageLayout from "@/components/ui/PageLayout"
+import Section from "@/components/ui/Section"
+import Stack from "@/components/ui/Stack"
+import VisibilityIcon from "@/components/ui/VisibilityIcon"
 
 type Mode = "login" | "register"
 
 export default function AuthForm() {
   const router = useRouter()
   const [mode, setMode] = useState<Mode>("login")
-  const [email, setEmail] = useState("")
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const authMutation = useMutation({
     mutationFn: async () => {
-      if (mode === "login") {
-        return login({ email, password })
+      const normalizedUsername = username.trim().toLowerCase()
+      const normalizedPassword = password
+
+      if (mode === "register") {
+        if (normalizedPassword !== confirmPassword) {
+          throw new Error("Passwords do not match")
+        }
+        await register({ username: normalizedUsername, password: normalizedPassword })
       }
 
-      return register({ email, password })
+      const result = await signIn("credentials", {
+        username: normalizedUsername,
+        password: normalizedPassword,
+        redirect: false
+      })
+
+      if (!result || result.error) {
+        throw new Error("Invalid username or password")
+      }
     },
     onSuccess: () => {
       router.push("/graphs")
@@ -40,94 +65,115 @@ export default function AuthForm() {
   }
 
   return (
-    <main className="console-atmosphere relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-10">
-      <div className="console-grid pointer-events-none absolute inset-0 opacity-[0.14]" />
+    <PageLayout className="min-h-screen flex items-center justify-center">
+      <FormContainer>
+        <PageHeader
+          title={mode === "login" ? "Access Workspace" : "Create Operator Account"}
+          description={mode === "login" ? "Sign in to open your graph workspace." : "Create a new account for this instance."}
+          action={<Badge>Beta</Badge>}
+        />
 
-      <Card className="fade-in relative z-10 w-full max-w-[460px] shadow-[var(--console-shadow-strong)]">
-        <header className="flex items-center justify-between rounded-t-2xl border-b border-[var(--console-border)] bg-[var(--console-subpanel)] px-4 py-3">
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#6fe8ff]">Relagraph Console</p>
-          <Badge>v0.1</Badge>
-        </header>
+        <Section title="Authentication">
+          <Stack>
+            <div className="grid grid-cols-2 gap-2 rounded-lg border border-[var(--console-border)] bg-[var(--console-subpanel)] p-1">
+              <Button
+                type="button"
+                size="md"
+                variant={mode === "login" ? "primary" : "ghost"}
+                className="rounded-md"
+                onClick={() => setMode("login")}
+              >
+                Login
+              </Button>
+              <Button
+                type="button"
+                size="md"
+                variant={mode === "register" ? "primary" : "ghost"}
+                className="rounded-md"
+                onClick={() => setMode("register")}
+              >
+                Register
+              </Button>
+            </div>
 
-        <div className="px-5 pb-5 pt-4 sm:px-6 sm:pb-6">
-          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[var(--console-success)]">Authentication</p>
-          <h1 className="mt-2 text-xl font-semibold text-[var(--console-text-strong)]">
-            {mode === "login" ? "Access Workspace" : "Create Operator Account"}
-          </h1>
-          <p className="mt-1.5 text-sm text-[var(--console-text-dim)]">
-            {mode === "login" ? "Sign in to open your graph workspace." : "Create a new account for this instance."}
-          </p>
+            <form onSubmit={onSubmit}>
+              <Stack>
+                <label className="block">
+                  <FieldLabel>Username</FieldLabel>
+                  <Input
+                    type="text"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    placeholder="your-username"
+                    required
+                  />
+                </label>
 
-          <div className="mt-5 grid grid-cols-2 gap-2 rounded-lg border border-[var(--console-border)] bg-[var(--console-subpanel)] p-1">
-            <Button
-              type="button"
-              size="md"
-              variant={mode === "login" ? "primary" : "ghost"}
-              className={`rounded-md border ${
-                mode === "login"
-                  ? "border-[var(--console-accent)] bg-[#08222b] text-[#6fe8ff]"
-                  : "border-transparent bg-transparent text-[var(--console-text-muted)] hover:bg-[#131d31]"
-              }`}
-              onClick={() => setMode("login")}
-            >
-              Login
-            </Button>
-            <Button
-              type="button"
-              size="md"
-              variant={mode === "register" ? "primary" : "ghost"}
-              className={`rounded-md border ${
-                mode === "register"
-                  ? "border-[var(--console-accent)] bg-[#08222b] text-[#6fe8ff]"
-                  : "border-transparent bg-transparent text-[var(--console-text-muted)] hover:bg-[#131d31]"
-              }`}
-              onClick={() => setMode("register")}
-            >
-              Register
-            </Button>
-          </div>
+                <label className="block">
+                  <FieldLabel>Password</FieldLabel>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      minLength={8}
+                      className="pr-10"
+                      required
+                    />
+                    <button
+                      type="button"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      onClick={() => setShowPassword((previous) => !previous)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--console-text-muted)] hover:text-[var(--console-text)]"
+                    >
+                      <VisibilityIcon hidden={showPassword} />
+                    </button>
+                  </div>
+                </label>
 
-          <form className="mt-5 space-y-4" onSubmit={onSubmit}>
-            <label className="block">
-              <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--console-text-muted)]">Email</span>
-              <Input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="name@example.com"
-                required
-              />
-            </label>
+                {mode === "register" ? (
+                  <label className="block">
+                    <FieldLabel>Confirm password</FieldLabel>
+                    <div className="relative">
+                      <Input
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        minLength={8}
+                        className="pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                        onClick={() => setShowConfirmPassword((previous) => !previous)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--console-text-muted)] hover:text-[var(--console-text)]"
+                      >
+                        <VisibilityIcon hidden={showConfirmPassword} />
+                      </button>
+                    </div>
+                  </label>
+                ) : null}
 
-            <label className="block">
-              <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--console-text-muted)]">Password</span>
-              <Input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                minLength={8}
-                required
-              />
-            </label>
+                {authMutation.error ? (
+                  <Card variant="danger" className="px-3 py-2 text-sm">
+                    {(authMutation.error as Error).message}
+                  </Card>
+                ) : null}
 
-            {authMutation.error ? (
-              <Card variant="danger" className="px-3 py-2 text-sm">
-                {(authMutation.error as Error).message}
-              </Card>
-            ) : null}
-
-            <Button
-              type="submit"
-              disabled={authMutation.isPending}
-              block
-              variant="primary"
-              className="tracking-[0.14em]"
-            >
-              {authMutation.isPending ? "Processing..." : submitLabel}
-            </Button>
-          </form>
-        </div>
-      </Card>
-    </main>
+                <Button
+                  type="submit"
+                  disabled={authMutation.isPending}
+                  block
+                  variant="primary"
+                >
+                  {authMutation.isPending ? "Processing..." : submitLabel}
+                </Button>
+              </Stack>
+            </form>
+          </Stack>
+        </Section>
+      </FormContainer>
+    </PageLayout>
   )
 }

@@ -2,17 +2,34 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
-import { FormEvent, useMemo, useState } from "react"
+import { FormEvent, useEffect, useMemo, useState } from "react"
 
-import { createGraphEntity, fetchGraphEntities } from "@/lib/api/graphs"
+import {
+  createGraphEntity,
+  createRelationship,
+  createRelationshipInterval,
+  deleteGraphEntity,
+  type GraphEntityDetail,
+  fetchGraphEntityDetail,
+  fetchGraphEntities,
+  fetchRelationshipTypes,
+  updateGraphEntity,
+  updateRelationship
+} from "@/lib/api/graphs"
+import { cx } from "@/lib/ui/cx"
+import type { Edge } from "@/types"
 import GraphExplorer from "@/components/graph/GraphExplorer"
-import Badge from "@/components/ui/Badge"
+import TimeSlider from "@/components/graph/TimeSlider"
 import Button from "@/components/ui/Button"
 import Card from "@/components/ui/Card"
+import FieldLabel from "@/components/ui/FieldLabel"
+import FormContainer from "@/components/ui/FormContainer"
 import Input from "@/components/ui/Input"
-import SectionHeader from "@/components/ui/SectionHeader"
+import PageHeader from "@/components/ui/PageHeader"
+import PageLayout from "@/components/ui/PageLayout"
+import Section from "@/components/ui/Section"
 import Select from "@/components/ui/Select"
-import { buttonStyles } from "@/lib/ui/styles"
+import Stack from "@/components/ui/Stack"
 
 type GraphWorkspaceProps = {
   graphId: string
@@ -20,167 +37,1232 @@ type GraphWorkspaceProps = {
   initialAsOf: string
 }
 
+type CreateMode = "new_node" | "existing_node"
+type RightPanelMode = "node" | "edge" | "link" | null
+
+type PersonProfileInput = {
+  birth_date: string
+  death_date: string
+  sex_at_birth: string
+  gender_identity: string
+  notes: string
+}
+
+type AnimalProfileInput = {
+  species: string
+  breed: string
+  sex: string
+  reproductive_status: string
+  birth_date: string
+  death_date: string
+  notes: string
+}
+
+type PlaceProfileInput = {
+  place_type: string
+  built_date: string
+  demolished_date: string
+  lat: string
+  lng: string
+  address_text: string
+  notes: string
+}
+
+type EntityNameRecord = GraphEntityDetail["entity_names"][number]
+
+const LEFT_PANEL_KEY = "relagraph:workspace:left-panel-expanded"
+const RIGHT_PANEL_KEY = "relagraph:workspace:right-panel-expanded"
+const TEMPORAL_SIMPLE_MODE = true
+const DEFAULT_RELATIONSHIP_START = "1900-01-01T00:00:00.000Z"
+const NAME_TYPE_OPTIONS = ["legal", "birth", "chosen", "nickname", "maiden", "alias", "religious"] as const
+const NAME_LANGUAGE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "", label: "Unspecified" },
+  { value: "en", label: "English" },
+  { value: "es", label: "Spanish" },
+  { value: "fr", label: "French" },
+  { value: "de", label: "German" },
+  { value: "pt", label: "Portuguese" },
+  { value: "it", label: "Italian" },
+  { value: "ru", label: "Russian" },
+  { value: "ar", label: "Arabic" },
+  { value: "he", label: "Hebrew" },
+  { value: "hi", label: "Hindi" },
+  { value: "zh", label: "Chinese" },
+  { value: "ja", label: "Japanese" },
+  { value: "ko", label: "Korean" }
+]
+const SEX_AT_BIRTH_OPTIONS = ["", "female", "male", "intersex", "unknown"] as const
+const GENDER_IDENTITY_OPTIONS = [
+  "",
+  "woman",
+  "man",
+  "nonbinary",
+  "agender",
+  "trans woman",
+  "trans man",
+  "questioning",
+  "other",
+  "prefer not to say"
+] as const
+
+function readBoolean(key: string, fallback: boolean): boolean {
+  if (typeof window === "undefined") {
+    return fallback
+  }
+
+  const stored = window.localStorage.getItem(key)
+  if (stored === null) {
+    return fallback
+  }
+
+  return stored === "1"
+}
+
+function toLocalDatetimeInputValue(iso: string): string {
+  const parsed = new Date(iso)
+  if (Number.isNaN(parsed.getTime())) {
+    return ""
+  }
+
+  const pad = (value: number) => String(value).padStart(2, "0")
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
+}
+
+function toDateInputValue(value: unknown): string {
+  if (typeof value !== "string" || value.length === 0) {
+    return ""
+  }
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : ""
+}
+
+type ToggleRowProps = {
+  label: string
+  checked: boolean
+  onChange: (next: boolean) => void
+}
+
+function ToggleRow({ label, checked, onChange }: ToggleRowProps) {
+  return (
+    <label className="flex items-center justify-between gap-3 rounded-md border border-[var(--console-border)] bg-[var(--console-subpanel)] px-2 py-1.5">
+      <span className="text-xs font-medium text-[var(--console-text-muted)]">{label}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="h-4 w-4 rounded border-[var(--console-input-border)] accent-[var(--console-primary)]"
+      />
+    </label>
+  )
+}
+
+type PanelShellProps = {
+  title: string
+  side: "left" | "right"
+  expanded: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}
+
+function PanelShell({ title, side, expanded, onToggle, children }: PanelShellProps) {
+  return (
+    <Stack
+      className={cx(
+        "shrink-0 rounded-lg border border-[var(--console-border)] bg-[var(--console-panel)] transition-[width] duration-150",
+        expanded ? "w-[320px]" : "w-12"
+      )}
+    >
+      <Stack className="h-full min-h-[68vh] gap-0">
+        <Stack className={cx("flex-row items-center gap-0 border-b border-[var(--console-border)] p-1", expanded ? "justify-between" : "justify-center")}>
+          {expanded ? (
+            <span className="px-2 text-xs font-medium uppercase tracking-wide text-[var(--console-text-muted)]">
+              {title}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            aria-label={`${expanded ? "Collapse" : "Expand"} ${side} panel`}
+            onClick={onToggle}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--console-border)] bg-[var(--console-subpanel)] text-[var(--console-text)] hover:bg-[var(--console-panel-muted)]"
+          >
+            {side === "left" ? (expanded ? <ChevronLeftIcon /> : <ChevronRightIcon />) : expanded ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+          </button>
+        </Stack>
+        {expanded ? <Stack className="flex-1 overflow-y-auto p-2">{children}</Stack> : null}
+      </Stack>
+    </Stack>
+  )
+}
+
 export default function GraphWorkspace({ graphId, graphName, initialAsOf }: GraphWorkspaceProps) {
-  const [newEntityName, setNewEntityName] = useState("")
-  const [newEntityKind, setNewEntityKind] = useState<"person" | "animal" | "place">("person")
-  const [selectedOverride, setSelectedOverride] = useState<string | null>(null)
-  const [showManager, setShowManager] = useState(false)
+  const [focusOverride, setFocusOverride] = useState<string | null>(null)
+  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>(null)
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null)
+  const [graphRefreshKey, setGraphRefreshKey] = useState(0)
+  const [asOf, setAsOf] = useState(initialAsOf)
+  const [graphDepth, setGraphDepth] = useState(3)
+  const [showNodeLabels, setShowNodeLabels] = useState(true)
+  const [showRelationshipLabels, setShowRelationshipLabels] = useState(false)
+  const [layoutMode, setLayoutMode] = useState<"auto" | "manual">("auto")
+  const [includeInactive, setIncludeInactive] = useState(TEMPORAL_SIMPLE_MODE)
+  const [leftExpanded, setLeftExpanded] = useState(() => readBoolean(LEFT_PANEL_KEY, true))
+  const [rightExpanded, setRightExpanded] = useState(() => readBoolean(RIGHT_PANEL_KEY, true))
+  const [isNodeDetailLoading, setIsNodeDetailLoading] = useState(false)
+
+  const [nodeKind, setNodeKind] = useState<"person" | "animal" | "place">("person")
+  const [entityNameText, setEntityNameText] = useState("")
+  const [entityNameType, setEntityNameType] = useState<(typeof NAME_TYPE_OPTIONS)[number]>("legal")
+  const [entityNameLanguage, setEntityNameLanguage] = useState("")
+  const [entityNameIsPrimary, setEntityNameIsPrimary] = useState(true)
+  const [entityNameStartDate, setEntityNameStartDate] = useState("")
+  const [entityNameEndDate, setEntityNameEndDate] = useState("")
+  const [entityNamesByType, setEntityNamesByType] = useState<EntityNameRecord[]>([])
+  const [nameFormBaseline, setNameFormBaseline] = useState("")
+  const [personProfile, setPersonProfile] = useState<PersonProfileInput>({
+    birth_date: "",
+    death_date: "",
+    sex_at_birth: "",
+    gender_identity: "",
+    notes: ""
+  })
+  const [animalProfile, setAnimalProfile] = useState<AnimalProfileInput>({
+    species: "",
+    breed: "",
+    sex: "",
+    reproductive_status: "",
+    birth_date: "",
+    death_date: "",
+    notes: ""
+  })
+  const [placeProfile, setPlaceProfile] = useState<PlaceProfileInput>({
+    place_type: "",
+    built_date: "",
+    demolished_date: "",
+    lat: "",
+    lng: "",
+    address_text: "",
+    notes: ""
+  })
+
+  const [edgeType, setEdgeType] = useState("")
+  const [edgeFromRole, setEdgeFromRole] = useState("")
+  const [edgeToRole, setEdgeToRole] = useState("")
+  const [edgeStart, setEdgeStart] = useState("")
+  const [edgeEnd, setEdgeEnd] = useState("")
+
+  const [createMode, setCreateMode] = useState<CreateMode>("new_node")
+  const [sourceNodeId, setSourceNodeId] = useState<string | null>(null)
+  const [newLinkedName, setNewLinkedName] = useState("")
+  const [newLinkedKind, setNewLinkedKind] = useState<"person" | "animal" | "place">("person")
+  const [existingTargetId, setExistingTargetId] = useState<string | null>(null)
+  const [newLinkType, setNewLinkType] = useState("")
+  const [newLinkFromRole, setNewLinkFromRole] = useState("")
+  const [newLinkToRole, setNewLinkToRole] = useState("")
+  const [newLinkStart, setNewLinkStart] = useState("")
+  const [newLinkEnd, setNewLinkEnd] = useState("")
+
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+    window.localStorage.setItem(LEFT_PANEL_KEY, leftExpanded ? "1" : "0")
+  }, [leftExpanded])
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+    window.localStorage.setItem(RIGHT_PANEL_KEY, rightExpanded ? "1" : "0")
+  }, [rightExpanded])
 
   const entitiesQuery = useQuery({
     queryKey: ["graph:entities", graphId],
     queryFn: () => fetchGraphEntities(graphId)
   })
-
-  const createEntityMutation = useMutation({
-    mutationFn: async () =>
-      createGraphEntity(graphId, {
-        entity_kind: newEntityKind,
-        display_name: newEntityName.trim()
-      }),
-    onSuccess: (entity) => {
-      setNewEntityName("")
-      setSelectedOverride(entity.id)
-      queryClient.invalidateQueries({ queryKey: ["graph:entities", graphId] })
-    }
+  const relationshipTypesQuery = useQuery({
+    queryKey: ["graph:relationship-types", graphId],
+    queryFn: () => fetchRelationshipTypes(graphId)
   })
 
   const entities = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
-  const selectedEntityId = useMemo(() => {
-    if (!selectedOverride) {
-      return entities[0]?.id ?? null
+  const relationshipTypes = useMemo(() => relationshipTypesQuery.data ?? [], [relationshipTypesQuery.data])
+  const createLinkRelationshipTypeValue = useMemo(() => {
+    if (newLinkType && relationshipTypes.some((type) => type.code === newLinkType)) {
+      return newLinkType
     }
+    return relationshipTypes[0]?.code ?? ""
+  }, [newLinkType, relationshipTypes])
+  const selectedCreateLinkRelationshipType = useMemo(
+    () => relationshipTypes.find((type) => type.code === createLinkRelationshipTypeValue) ?? null,
+    [relationshipTypes, createLinkRelationshipTypeValue]
+  )
+  const createLinkSourceRoleOptions = useMemo(
+    () => selectedCreateLinkRelationshipType?.source_roles ?? [],
+    [selectedCreateLinkRelationshipType]
+  )
+  const createLinkTargetRoleOptions = useMemo(
+    () => selectedCreateLinkRelationshipType?.target_roles ?? [],
+    [selectedCreateLinkRelationshipType]
+  )
+  const edgeRelationshipTypeValue = useMemo(() => {
+    if (edgeType && relationshipTypes.some((type) => type.code === edgeType)) {
+      return edgeType
+    }
+    return relationshipTypes[0]?.code ?? ""
+  }, [edgeType, relationshipTypes])
+  const selectedEdgeRelationshipType = useMemo(
+    () => relationshipTypes.find((type) => type.code === edgeRelationshipTypeValue) ?? null,
+    [relationshipTypes, edgeRelationshipTypeValue]
+  )
+  const edgeSourceRoleOptions = useMemo(
+    () => selectedEdgeRelationshipType?.source_roles ?? [],
+    [selectedEdgeRelationshipType]
+  )
+  const edgeTargetRoleOptions = useMemo(
+    () => selectedEdgeRelationshipType?.target_roles ?? [],
+    [selectedEdgeRelationshipType]
+  )
+  const createLinkSourceRoleValue = useMemo(() => {
+    if (newLinkFromRole) {
+      return newLinkFromRole
+    }
+    return createLinkSourceRoleOptions[0] ?? ""
+  }, [newLinkFromRole, createLinkSourceRoleOptions])
+  const createLinkTargetRoleValue = useMemo(() => {
+    if (newLinkToRole) {
+      return newLinkToRole
+    }
+    return createLinkTargetRoleOptions[0] ?? ""
+  }, [newLinkToRole, createLinkTargetRoleOptions])
 
-    return entities.some((entity) => entity.id === selectedOverride)
-      ? selectedOverride
-      : (entities[0]?.id ?? null)
-  }, [entities, selectedOverride])
+  const focusEntityId = useMemo(() => {
+    if (focusOverride && entities.some((entity) => entity.id === focusOverride)) {
+      return focusOverride
+    }
+    if (selectedNodeId && entities.some((entity) => entity.id === selectedNodeId)) {
+      return selectedNodeId
+    }
+    return entities[0]?.id ?? null
+  }, [entities, focusOverride, selectedNodeId])
 
-  function onCreateEntity(event: FormEvent<HTMLFormElement>) {
+  const selectedNode = useMemo(
+    () => entities.find((entity) => entity.id === selectedNodeId) ?? null,
+    [entities, selectedNodeId]
+  )
+  const selectedEdgeSourceName = useMemo(() => {
+    if (!selectedEdge) {
+      return ""
+    }
+    return entities.find((entity) => entity.id === selectedEdge.from_entity_id)?.display_name ?? "Unknown source node"
+  }, [entities, selectedEdge])
+  const selectedEdgeTargetName = useMemo(() => {
+    if (!selectedEdge) {
+      return ""
+    }
+    return entities.find((entity) => entity.id === selectedEdge.to_entity_id)?.display_name ?? "Unknown target node"
+  }, [entities, selectedEdge])
+
+  const sourceEntityId = useMemo(() => {
+    if (sourceNodeId && entities.some((entity) => entity.id === sourceNodeId)) {
+      return sourceNodeId
+    }
+    return selectedNodeId ?? focusEntityId ?? ""
+  }, [entities, focusEntityId, selectedNodeId, sourceNodeId])
+
+  const targetEntityId = useMemo(() => {
+    if (existingTargetId && entities.some((entity) => entity.id === existingTargetId)) {
+      return existingTargetId
+    }
+    return entities.find((entity) => entity.id !== sourceEntityId)?.id ?? ""
+  }, [entities, existingTargetId, sourceEntityId])
+
+  const saveNodeMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedNode) {
+        throw new Error("No node selected")
+      }
+      if (!entityNameText.trim()) {
+        throw new Error("Name required")
+      }
+      const profilePayload =
+        nodeKind === "person"
+          ? personProfile
+          : nodeKind === "animal"
+            ? animalProfile
+            : placeProfile
+      await updateGraphEntity(graphId, selectedNode.id, {
+        entity_kind: nodeKind,
+        entity_name: {
+          name_text: entityNameText.trim(),
+          name_type: entityNameType,
+          language_code: entityNameLanguage.trim() || null,
+          is_primary: entityNameIsPrimary,
+          start_date: entityNameStartDate || null,
+          end_date: entityNameEndDate || null
+        },
+        profile: {
+          ...profilePayload,
+          ...(nodeKind === "place"
+            ? {
+                lat: placeProfile.lat.trim() ? Number(placeProfile.lat) : null,
+                lng: placeProfile.lng.trim() ? Number(placeProfile.lng) : null
+              }
+            : {})
+        }
+      })
+    },
+    onSuccess: () => {
+      setGraphRefreshKey((previous) => previous + 1)
+      queryClient.invalidateQueries({ queryKey: ["graph:entities", graphId] })
+      if (selectedNodeId) {
+        queryClient.invalidateQueries({ queryKey: ["graph:entity-detail", graphId, selectedNodeId] })
+      }
+      setNameFormBaseline(buildNameFormSignature())
+    }
+  })
+
+  const saveEdgeMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedEdge) {
+        throw new Error("No edge selected")
+      }
+      if (!edgeType.trim()) {
+        throw new Error("Type required")
+      }
+      if (!edgeFromRole.trim() || !edgeToRole.trim()) {
+        throw new Error("Roles required")
+      }
+      if (!edgeStart) {
+        throw new Error("Start required")
+      }
+
+      await updateRelationship(graphId, selectedEdge.id, {
+        relationship_type: edgeType.trim(),
+        participants: [
+          { entity_id: selectedEdge.from_entity_id, role: edgeFromRole.trim() },
+          { entity_id: selectedEdge.to_entity_id, role: edgeToRole.trim() }
+        ]
+      })
+
+      await createRelationshipInterval(graphId, selectedEdge.id, {
+        start: new Date(edgeStart).toISOString(),
+        end: edgeEnd ? new Date(edgeEnd).toISOString() : null
+      })
+    },
+    onSuccess: () => {
+      setGraphRefreshKey((previous) => previous + 1)
+    }
+  })
+
+  const deleteNodeMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedNode) {
+        throw new Error("No node selected")
+      }
+      await deleteGraphEntity(graphId, selectedNode.id)
+    },
+    onSuccess: () => {
+      setGraphRefreshKey((previous) => previous + 1)
+      queryClient.invalidateQueries({ queryKey: ["graph:entities", graphId] })
+      setSelectedNodeId(null)
+      setSelectedEdge(null)
+      setRightPanelMode(null)
+      setSourceNodeId(null)
+    }
+  })
+
+  const createLinkMutation = useMutation({
+    mutationFn: async () => {
+      const effectiveRelationshipType = createLinkRelationshipTypeValue.trim()
+      const effectiveSourceRole = createLinkSourceRoleValue.trim()
+      const effectiveTargetRole = createLinkTargetRoleValue.trim()
+
+      if (!sourceEntityId) {
+        throw new Error("Source required")
+      }
+      if (!effectiveRelationshipType) {
+        throw new Error("Type required")
+      }
+      if (!effectiveSourceRole || !effectiveTargetRole) {
+        throw new Error("Roles required")
+      }
+      const startDate = newLinkStart ? new Date(newLinkStart) : new Date(DEFAULT_RELATIONSHIP_START)
+      if (Number.isNaN(startDate.getTime())) {
+        throw new Error("Start invalid")
+      }
+      const endDate = newLinkEnd ? new Date(newLinkEnd) : null
+      if (endDate && Number.isNaN(endDate.getTime())) {
+        throw new Error("End invalid")
+      }
+
+      let toEntityId = targetEntityId
+      if (createMode === "new_node") {
+        if (!newLinkedName.trim()) {
+          throw new Error("Name required")
+        }
+        const createdEntity = await createGraphEntity(graphId, {
+          entity_kind: newLinkedKind,
+          display_name: newLinkedName.trim()
+        })
+        toEntityId = createdEntity.id
+      } else if (!toEntityId || toEntityId === sourceEntityId) {
+        throw new Error("Target required")
+      }
+
+      const relationship = await createRelationship(graphId, {
+        relationship_type: effectiveRelationshipType,
+        participants: [
+          { entity_id: sourceEntityId, role: effectiveSourceRole },
+          { entity_id: toEntityId, role: effectiveTargetRole }
+        ]
+      })
+
+      await createRelationshipInterval(graphId, relationship.id, {
+        start: startDate.toISOString(),
+        end: endDate ? endDate.toISOString() : null
+      })
+    },
+    onSuccess: () => {
+      setGraphRefreshKey((previous) => previous + 1)
+      queryClient.invalidateQueries({ queryKey: ["graph:entities", graphId] })
+      if (sourceEntityId) {
+        setSelectedNodeId(sourceEntityId)
+      }
+      setSelectedEdge(null)
+      setNewLinkedName("")
+      setNewLinkType("")
+      setNewLinkFromRole("")
+      setNewLinkToRole("")
+      setNewLinkStart("")
+      setNewLinkEnd("")
+    }
+  })
+
+  function onSaveNode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!newEntityName.trim()) {
-      return
-    }
-
-    createEntityMutation.mutate()
+    saveNodeMutation.mutate()
   }
 
-  return (
-    <main className="console-atmosphere relative min-h-screen overflow-hidden bg-[var(--console-bg)] px-5 py-8 md:px-8 md:py-10">
-      <div className="console-grid pointer-events-none absolute inset-0 opacity-[0.12]" />
-      <section className="relative z-10 mx-auto w-full max-w-[1200px]">
-        <Card as="header" className="fade-in mb-5 p-5 shadow-[var(--console-shadow-strong)]">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-[var(--console-success)]">Graph Workspace</p>
-              <h1 className="mt-1 text-2xl font-semibold text-[var(--console-text-strong)]">{graphName}</h1>
-              <p className="mt-1 text-sm text-[var(--console-text-dim)]">Explore connections and expand from selected nodes.</p>
+  function onSaveEdge(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    saveEdgeMutation.mutate()
+  }
+
+  function onCreateLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    createLinkMutation.mutate()
+  }
+
+  function onCreateLinkTypeChange(nextType: string) {
+    setNewLinkType(nextType)
+    const nextRelationshipType = relationshipTypes.find((type) => type.code === nextType)
+    if (!nextRelationshipType) {
+      return
+    }
+    if (nextRelationshipType.source_roles.length > 0 && !nextRelationshipType.source_roles.includes(newLinkFromRole)) {
+      setNewLinkFromRole(nextRelationshipType.source_roles[0])
+    }
+    if (nextRelationshipType.target_roles.length > 0 && !nextRelationshipType.target_roles.includes(newLinkToRole)) {
+      const preferredTargetRole =
+        nextRelationshipType.target_roles.length > 1
+          ? nextRelationshipType.target_roles.find((role) => role !== nextRelationshipType.source_roles[0])
+          : undefined
+      setNewLinkToRole(preferredTargetRole ?? nextRelationshipType.target_roles[0])
+    }
+  }
+
+  function onEdgeTypeChange(nextType: string) {
+    setEdgeType(nextType)
+    const nextRelationshipType = relationshipTypes.find((type) => type.code === nextType)
+    if (!nextRelationshipType) {
+      return
+    }
+    if (nextRelationshipType.source_roles.length > 0 && !nextRelationshipType.source_roles.includes(edgeFromRole)) {
+      setEdgeFromRole(nextRelationshipType.source_roles[0])
+    }
+    if (nextRelationshipType.target_roles.length > 0 && !nextRelationshipType.target_roles.includes(edgeToRole)) {
+      const preferredTargetRole =
+        nextRelationshipType.target_roles.length > 1
+          ? nextRelationshipType.target_roles.find((role) => role !== nextRelationshipType.source_roles[0])
+          : undefined
+      setEdgeToRole(preferredTargetRole ?? nextRelationshipType.target_roles[0])
+    }
+  }
+
+  function buildNameFormSignature() {
+    return JSON.stringify({
+      name_text: entityNameText,
+      language_code: entityNameLanguage,
+      is_primary: entityNameIsPrimary,
+      start_date: entityNameStartDate,
+      end_date: entityNameEndDate
+    })
+  }
+
+  function resolveNameForType(
+    nameType: (typeof NAME_TYPE_OPTIONS)[number],
+    names: EntityNameRecord[]
+  ): EntityNameRecord | undefined {
+    const exact = names.find((name) => name.name_type === nameType)
+    if (exact) {
+      return exact
+    }
+    if (nameType === "legal") {
+      return names.find((name) => name.name_type === "preferred")
+    }
+    return undefined
+  }
+
+  function applyEntityNameForType(
+    nameType: (typeof NAME_TYPE_OPTIONS)[number],
+    names: EntityNameRecord[],
+    fallbackDisplayName: string
+  ) {
+    const selectedName = resolveNameForType(nameType, names)
+    setEntityNameType(nameType)
+    setEntityNameText(selectedName?.name_text ?? "")
+    setEntityNameLanguage(selectedName?.language_code ?? "")
+    setEntityNameIsPrimary(selectedName?.is_primary ?? false)
+    setEntityNameStartDate(toDateInputValue(selectedName?.start_date))
+    setEntityNameEndDate(toDateInputValue(selectedName?.end_date))
+
+    // If no names exist yet, seed from current display text.
+    if (names.length === 0) {
+      setEntityNameText(fallbackDisplayName)
+      setEntityNameIsPrimary(true)
+    }
+
+    // If the entity already has saved names, primary should mirror the selected type's saved record.
+    if (names.length > 0 && !selectedName) {
+      setEntityNameIsPrimary(false)
+    }
+  }
+
+  function onEntityNameTypeChange(nextType: (typeof NAME_TYPE_OPTIONS)[number]) {
+    if (nextType === entityNameType) {
+      return
+    }
+    if (nameFormBaseline && buildNameFormSignature() !== nameFormBaseline) {
+      const shouldDiscard = window.confirm(
+        "You have unsaved name changes. Switch name type and discard unsaved changes?"
+      )
+      if (!shouldDiscard) {
+        return
+      }
+    }
+    applyEntityNameForType(nextType, entityNamesByType, "")
+    const selectedName = resolveNameForType(nextType, entityNamesByType)
+    setNameFormBaseline(
+      JSON.stringify({
+        name_text: selectedName?.name_text ?? "",
+        language_code: selectedName?.language_code ?? "",
+        is_primary: selectedName?.is_primary ?? false,
+        start_date: toDateInputValue(selectedName?.start_date),
+        end_date: toDateInputValue(selectedName?.end_date)
+      })
+    )
+  }
+
+  const showNodeEditor = rightPanelMode === "node" && selectedNode !== null
+  const showEdgeEditor = rightPanelMode === "edge" && selectedEdge !== null
+  const showLinkEditor = rightPanelMode === "link"
+
+  async function loadNodeDetailIntoEditor(nodeId: string) {
+    setIsNodeDetailLoading(true)
+    try {
+      const detail = await queryClient.fetchQuery({
+        queryKey: ["graph:entity-detail", graphId, nodeId],
+        queryFn: () => fetchGraphEntityDetail(graphId, nodeId)
+      })
+      setNodeKind(detail.entity_kind)
+      const names = detail.entity_names ?? (detail.entity_name ? [detail.entity_name] : [])
+      setEntityNamesByType(names)
+      const preferredTypeRaw = detail.entity_name?.name_type
+      const preferredType = NAME_TYPE_OPTIONS.includes(preferredTypeRaw as (typeof NAME_TYPE_OPTIONS)[number])
+        ? (preferredTypeRaw as (typeof NAME_TYPE_OPTIONS)[number])
+        : preferredTypeRaw === "preferred"
+          ? "legal"
+        : "legal"
+      applyEntityNameForType(preferredType, names, detail.display_name)
+      const selectedName = resolveNameForType(preferredType, names)
+      setNameFormBaseline(
+        JSON.stringify({
+          name_text: selectedName?.name_text ?? (names.length === 0 ? detail.display_name : ""),
+          language_code: selectedName?.language_code ?? "",
+          is_primary: selectedName?.is_primary ?? (names.length === 0),
+          start_date: toDateInputValue(selectedName?.start_date),
+          end_date: toDateInputValue(selectedName?.end_date)
+        })
+      )
+
+      if (detail.entity_kind === "person") {
+        const profile = (detail.profile ?? {}) as Record<string, unknown>
+        setPersonProfile({
+          birth_date: toDateInputValue(profile.birth_date),
+          death_date: toDateInputValue(profile.death_date),
+          sex_at_birth: typeof profile.sex_at_birth === "string" ? profile.sex_at_birth : "",
+          gender_identity: typeof profile.gender_identity === "string" ? profile.gender_identity : "",
+          notes: typeof profile.notes === "string" ? profile.notes : ""
+        })
+      }
+
+      if (detail.entity_kind === "animal") {
+        const profile = (detail.profile ?? {}) as Record<string, unknown>
+        setAnimalProfile({
+          species: typeof profile.species === "string" ? profile.species : "",
+          breed: typeof profile.breed === "string" ? profile.breed : "",
+          sex: typeof profile.sex === "string" ? profile.sex : "",
+          reproductive_status:
+            typeof profile.reproductive_status === "string" ? profile.reproductive_status : "",
+          birth_date: toDateInputValue(profile.birth_date),
+          death_date: toDateInputValue(profile.death_date),
+          notes: typeof profile.notes === "string" ? profile.notes : ""
+        })
+      }
+
+      if (detail.entity_kind === "place") {
+        const profile = (detail.profile ?? {}) as Record<string, unknown>
+        setPlaceProfile({
+          place_type: typeof profile.place_type === "string" ? profile.place_type : "",
+          built_date: toDateInputValue(profile.built_date),
+          demolished_date: toDateInputValue(profile.demolished_date),
+          lat: profile.lat === null || profile.lat === undefined ? "" : String(profile.lat),
+          lng: profile.lng === null || profile.lng === undefined ? "" : String(profile.lng),
+          address_text: typeof profile.address_text === "string" ? profile.address_text : "",
+          notes: typeof profile.notes === "string" ? profile.notes : ""
+        })
+      }
+    } finally {
+      setIsNodeDetailLoading(false)
+    }
+  }
+
+  const controlsPanel = (
+    <Section className="mb-0">
+      <Stack className="gap-3">
+        <label className="block">
+          <FieldLabel>Focus</FieldLabel>
+          <Select
+            value={focusEntityId ?? ""}
+            onChange={(event) => {
+              const nextId = event.target.value || null
+              setFocusOverride(nextId)
+              setSelectedNodeId(nextId)
+              setSelectedEdge(null)
+              setRightPanelMode(nextId ? "node" : null)
+              if (nextId) {
+                void loadNodeDetailIntoEditor(nextId)
+              }
+            }}
+            disabled={entities.length === 0}
+          >
+            {entities.length === 0 ? <option value="">-</option> : null}
+            {entities.map((entity) => (
+              <option key={entity.id} value={entity.id}>
+                {entity.display_name}
+              </option>
+            ))}
+          </Select>
+        </label>
+
+        {!TEMPORAL_SIMPLE_MODE ? <TimeSlider asOf={asOf} onChange={setAsOf} /> : null}
+
+        <label className="block">
+          <FieldLabel>Distance</FieldLabel>
+          <Select value={String(graphDepth)} onChange={(event) => setGraphDepth(Number(event.target.value))}>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </Select>
+        </label>
+
+        <Stack className="gap-2">
+          <ToggleRow label="Auto shape" checked={layoutMode === "auto"} onChange={(next) => setLayoutMode(next ? "auto" : "manual")} />
+          <ToggleRow label="Node labels" checked={showNodeLabels} onChange={setShowNodeLabels} />
+          <ToggleRow label="Edge labels" checked={showRelationshipLabels} onChange={setShowRelationshipLabels} />
+          {!TEMPORAL_SIMPLE_MODE ? <ToggleRow label="Inactive" checked={includeInactive} onChange={setIncludeInactive} /> : null}
+        </Stack>
+
+        <Card className="px-3 py-2">
+          <Stack className="gap-2">
+            <FieldLabel compact>Color key</FieldLabel>
+            <div className="grid grid-cols-1 gap-2 text-xs text-[var(--console-text-muted)]">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--console-text)]">Node colors</span>
+              <span style={{ color: "var(--graph-node-person, #2563eb)" }}>Person node</span>
+              <span style={{ color: "var(--graph-node-animal, #059669)" }}>Animal node</span>
+              <span style={{ color: "var(--graph-node-place, #d97706)" }}>Place node</span>
+              <span className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--console-text)]">Link colors</span>
+              <span style={{ color: "#2563eb" }}>Parent-child link</span>
+              <span style={{ color: "#e11d48" }}>Romantic link</span>
+              <span style={{ color: "#16a34a" }}>Animal link</span>
+              <span style={{ color: "#f59e0b" }}>Sibling link</span>
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="ghost"
-                block
-                className="sm:w-auto"
-                onClick={() => setShowManager((previous) => !previous)}
-              >
-                {showManager ? "Hide controls" : "Manage graph"}
-              </Button>
-              <Link
-                href="/graphs"
-                className={buttonStyles({
-                  variant: "ghost",
-                  block: true,
-                  className: "sm:w-auto"
-                })}
-              >
-                Back to graphs
-              </Link>
-            </div>
-          </div>
+          </Stack>
         </Card>
+      </Stack>
+    </Section>
+  )
 
-        {selectedEntityId ? (
-          <GraphExplorer graphId={graphId} entityId={selectedEntityId} initialAsOf={initialAsOf} />
-        ) : (
-          <Card className="stagger-2 fade-in mb-5 border-dashed p-8 text-center text-sm text-[var(--console-text-dim)]">
-            No entities yet. Create your first entity to start this graph.
-          </Card>
-        )}
+  const editPanel = (
+    <Stack>
+      {showNodeEditor ? (
+        <Section className="mb-0">
+          <FormContainer>
+            <form onSubmit={onSaveNode}>
+              <Stack className="gap-3">
+                <label className="block">
+                  <FieldLabel compact>Node type</FieldLabel>
+                  <Select value={nodeKind} onChange={(event) => setNodeKind(event.target.value as "person" | "animal" | "place")}>
+                    <option value="person">person</option>
+                    <option value="animal">animal</option>
+                    <option value="place">place</option>
+                  </Select>
+                </label>
 
-        {(showManager || !selectedEntityId) ? (
-          <Card className="stagger-1 fade-in mt-5 grid gap-4 p-5 lg:grid-cols-[1.1fr_0.9fr]">
-            <Card as="form" variant="subpanel" onSubmit={onCreateEntity} className="space-y-3 p-4">
-              <SectionHeader>Create Entity</SectionHeader>
-              <label className="block">
-                <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--console-text-muted)]">Name</span>
-                <Input
-                  value={newEntityName}
-                  onChange={(event) => setNewEntityName(event.target.value)}
-                  required
-                />
-              </label>
-              <label className="block">
-                <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-[var(--console-text-muted)]">Kind</span>
-                <Select
-                  value={newEntityKind}
-                  onChange={(event) => setNewEntityKind(event.target.value as "person" | "animal" | "place")}
+                <label className="block">
+                  <FieldLabel compact>Name type</FieldLabel>
+                  <Select
+                    value={entityNameType}
+                    onChange={(event) => onEntityNameTypeChange(event.target.value as (typeof NAME_TYPE_OPTIONS)[number])}
+                  >
+                    {NAME_TYPE_OPTIONS.map((nameType) => (
+                      <option key={nameType} value={nameType}>{nameType}</option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Name</FieldLabel>
+                  <Input value={entityNameText} onChange={(event) => setEntityNameText(event.target.value)} required />
+                </label>
+                <label className="flex items-center justify-between gap-3 rounded-md border border-[var(--console-border)] bg-[var(--console-subpanel)] px-2 py-1.5">
+                  <FieldLabel compact>Primary Name</FieldLabel>
+                  <input
+                    type="checkbox"
+                    checked={entityNameIsPrimary}
+                    onChange={(event) => setEntityNameIsPrimary(event.target.checked)}
+                    className="h-4 w-4 rounded border-[var(--console-input-border)] accent-[var(--console-primary)]"
+                  />
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Name Language</FieldLabel>
+                  <Select value={entityNameLanguage} onChange={(event) => setEntityNameLanguage(event.target.value)}>
+                    {NAME_LANGUAGE_OPTIONS.map((language) => (
+                      <option key={language.value || "unspecified"} value={language.value}>{language.label}</option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Name active from</FieldLabel>
+                  <Input type="date" value={entityNameStartDate} onChange={(event) => setEntityNameStartDate(event.target.value)} />
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Name active until</FieldLabel>
+                  <Input type="date" value={entityNameEndDate} onChange={(event) => setEntityNameEndDate(event.target.value)} />
+                </label>
+
+                {nodeKind === "person" ? (
+                  <>
+                    <label className="block">
+                      <FieldLabel compact>Birth date</FieldLabel>
+                      <Input type="date" value={personProfile.birth_date} onChange={(event) => setPersonProfile((value) => ({ ...value, birth_date: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Death date</FieldLabel>
+                      <Input type="date" value={personProfile.death_date} onChange={(event) => setPersonProfile((value) => ({ ...value, death_date: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Sex at Birth</FieldLabel>
+                      <Select value={personProfile.sex_at_birth} onChange={(event) => setPersonProfile((value) => ({ ...value, sex_at_birth: event.target.value }))}>
+                        {SEX_AT_BIRTH_OPTIONS.map((value) => (
+                          <option key={value || "unspecified"} value={value}>{value || "Unspecified"}</option>
+                        ))}
+                      </Select>
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Gender Identity</FieldLabel>
+                      <Select value={personProfile.gender_identity} onChange={(event) => setPersonProfile((value) => ({ ...value, gender_identity: event.target.value }))}>
+                        {GENDER_IDENTITY_OPTIONS.map((value) => (
+                          <option key={value || "unspecified"} value={value}>{value || "Unspecified"}</option>
+                        ))}
+                      </Select>
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Profile notes</FieldLabel>
+                      <Input value={personProfile.notes} onChange={(event) => setPersonProfile((value) => ({ ...value, notes: event.target.value }))} />
+                    </label>
+                  </>
+                ) : null}
+
+                {nodeKind === "animal" ? (
+                  <>
+                    <label className="block">
+                      <FieldLabel compact>Species</FieldLabel>
+                      <Input value={animalProfile.species} onChange={(event) => setAnimalProfile((value) => ({ ...value, species: event.target.value }))} required />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Breed</FieldLabel>
+                      <Input value={animalProfile.breed} onChange={(event) => setAnimalProfile((value) => ({ ...value, breed: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Sex</FieldLabel>
+                      <Input value={animalProfile.sex} onChange={(event) => setAnimalProfile((value) => ({ ...value, sex: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Reproductive status</FieldLabel>
+                      <Input value={animalProfile.reproductive_status} onChange={(event) => setAnimalProfile((value) => ({ ...value, reproductive_status: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Birth date</FieldLabel>
+                      <Input type="date" value={animalProfile.birth_date} onChange={(event) => setAnimalProfile((value) => ({ ...value, birth_date: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Death date</FieldLabel>
+                      <Input type="date" value={animalProfile.death_date} onChange={(event) => setAnimalProfile((value) => ({ ...value, death_date: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Profile notes</FieldLabel>
+                      <Input value={animalProfile.notes} onChange={(event) => setAnimalProfile((value) => ({ ...value, notes: event.target.value }))} />
+                    </label>
+                  </>
+                ) : null}
+
+                {nodeKind === "place" ? (
+                  <>
+                    <label className="block">
+                      <FieldLabel compact>Place type</FieldLabel>
+                      <Input value={placeProfile.place_type} onChange={(event) => setPlaceProfile((value) => ({ ...value, place_type: event.target.value }))} required />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Built date</FieldLabel>
+                      <Input type="date" value={placeProfile.built_date} onChange={(event) => setPlaceProfile((value) => ({ ...value, built_date: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Demolished date</FieldLabel>
+                      <Input type="date" value={placeProfile.demolished_date} onChange={(event) => setPlaceProfile((value) => ({ ...value, demolished_date: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Latitude</FieldLabel>
+                      <Input type="number" step="any" value={placeProfile.lat} onChange={(event) => setPlaceProfile((value) => ({ ...value, lat: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Longitude</FieldLabel>
+                      <Input type="number" step="any" value={placeProfile.lng} onChange={(event) => setPlaceProfile((value) => ({ ...value, lng: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Address</FieldLabel>
+                      <Input value={placeProfile.address_text} onChange={(event) => setPlaceProfile((value) => ({ ...value, address_text: event.target.value }))} />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>Profile notes</FieldLabel>
+                      <Input value={placeProfile.notes} onChange={(event) => setPlaceProfile((value) => ({ ...value, notes: event.target.value }))} />
+                    </label>
+                  </>
+                ) : null}
+
+                <Button type="submit" disabled={saveNodeMutation.isPending || isNodeDetailLoading}>Save node</Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  disabled={deleteNodeMutation.isPending}
+                  onClick={() => {
+                    const confirmed = window.confirm("Delete this node? This also deletes connected relationships.")
+                    if (!confirmed) {
+                      return
+                    }
+                    deleteNodeMutation.mutate()
+                  }}
                 >
-                  <option value="person">person</option>
-                  <option value="animal">animal</option>
-                  <option value="place">place</option>
-                </Select>
-              </label>
-              <Button
-                type="submit"
-                disabled={createEntityMutation.isPending}
-                variant="primary"
-                className="tracking-[0.14em]"
-              >
-                {createEntityMutation.isPending ? "Creating..." : "Create entity"}
-              </Button>
-              {createEntityMutation.error ? (
-                <Card variant="danger" className="p-3 text-sm">
-                  {(createEntityMutation.error as Error).message}
-                </Card>
-              ) : null}
-            </Card>
+                  Delete node
+                </Button>
+                {saveNodeMutation.error ? <Card variant="danger" className="px-3 py-2 text-xs">Save failed</Card> : null}
+                {deleteNodeMutation.error ? <Card variant="danger" className="px-3 py-2 text-xs">Delete failed</Card> : null}
+              </Stack>
+            </form>
+          </FormContainer>
+        </Section>
+      ) : null}
 
-            <Card variant="subpanel" className="p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <SectionHeader>Focus Entity</SectionHeader>
-                <Badge>{entities.length} total</Badge>
-              </div>
-              {entitiesQuery.isLoading ? (
-                <Card variant="subpanel" className="mt-2 p-2 text-sm text-[var(--console-text-dim)]">
-                  Loading entities...
-                </Card>
-              ) : null}
-              {entitiesQuery.error ? (
-                <Card variant="danger" className="mt-2 p-2 text-sm">
-                  {(entitiesQuery.error as Error).message}
-                </Card>
-              ) : null}
-              <Select
-                value={selectedEntityId ?? ""}
-                onChange={(event) => setSelectedOverride(event.target.value || null)}
-                className="mt-2"
-                disabled={entities.length === 0}
-              >
-                {entities.length === 0 ? <option value="">No entities available</option> : null}
-                {entities.map((entity) => (
-                  <option key={entity.id} value={entity.id}>
-                    {entity.display_name} ({entity.entity_kind})
-                  </option>
-                ))}
-              </Select>
-              <p className="mt-3 text-xs text-[var(--console-text-dim)]">
-                Choose which entity the graph view should center on.
-              </p>
-            </Card>
-          </Card>
-        ) : null}
-      </section>
-    </main>
+      {showEdgeEditor ? (
+        <Section className="mb-0">
+          <FormContainer>
+            <form onSubmit={onSaveEdge}>
+              <Stack className="gap-3">
+                <label className="block">
+                  <FieldLabel compact>Source node</FieldLabel>
+                  <Input value={selectedEdgeSourceName} readOnly />
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Target node</FieldLabel>
+                  <Input value={selectedEdgeTargetName} readOnly />
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Relationship type</FieldLabel>
+                  <Select value={edgeRelationshipTypeValue} onChange={(event) => onEdgeTypeChange(event.target.value)} required>
+                    {relationshipTypes.map((type) => (
+                      <option key={type.code} value={type.code}>{type.display_name || type.code}</option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Source node role</FieldLabel>
+                  {edgeSourceRoleOptions.length > 0 ? (
+                    <Select value={edgeFromRole} onChange={(event) => setEdgeFromRole(event.target.value)} required>
+                      {edgeSourceRoleOptions.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input value={edgeFromRole} onChange={(event) => setEdgeFromRole(event.target.value)} required />
+                  )}
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Target node role</FieldLabel>
+                  {edgeTargetRoleOptions.length > 0 ? (
+                    <Select value={edgeToRole} onChange={(event) => setEdgeToRole(event.target.value)} required>
+                      {edgeTargetRoleOptions.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input value={edgeToRole} onChange={(event) => setEdgeToRole(event.target.value)} required />
+                  )}
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Relationship active from</FieldLabel>
+                  <Input type="datetime-local" value={edgeStart} onChange={(event) => setEdgeStart(event.target.value)} required />
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Relationship active until</FieldLabel>
+                  <Input type="datetime-local" value={edgeEnd} onChange={(event) => setEdgeEnd(event.target.value)} />
+                </label>
+                <Button type="submit" disabled={saveEdgeMutation.isPending}>Save edge</Button>
+                {saveEdgeMutation.error ? <Card variant="danger" className="px-3 py-2 text-xs">Save failed</Card> : null}
+              </Stack>
+            </form>
+          </FormContainer>
+        </Section>
+      ) : null}
+
+      {showLinkEditor ? (
+        <Section className="mb-0">
+          <FormContainer>
+            <form onSubmit={onCreateLink}>
+              <Stack className="gap-3">
+                <label className="block">
+                  <FieldLabel compact>Link action</FieldLabel>
+                  <Select value={createMode} onChange={(event) => setCreateMode(event.target.value as CreateMode)}>
+                    <option value="new_node">Create linked node</option>
+                    <option value="existing_node">Link existing node</option>
+                  </Select>
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Source node</FieldLabel>
+                  <Select value={sourceEntityId} onChange={(event) => setSourceNodeId(event.target.value || null)} required>
+                    <option value=""></option>
+                    {entities.map((entity) => (
+                      <option key={entity.id} value={entity.id}>
+                        {entity.display_name}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+
+                {createMode === "new_node" ? (
+                  <>
+                    <label className="block">
+                      <FieldLabel compact>New node label</FieldLabel>
+                      <Input value={newLinkedName} onChange={(event) => setNewLinkedName(event.target.value)} required />
+                    </label>
+                    <label className="block">
+                      <FieldLabel compact>New node kind</FieldLabel>
+                      <Select
+                        value={newLinkedKind}
+                        onChange={(event) => setNewLinkedKind(event.target.value as "person" | "animal" | "place")}
+                      >
+                        <option value="person">person</option>
+                        <option value="animal">animal</option>
+                        <option value="place">place</option>
+                      </Select>
+                    </label>
+                  </>
+                ) : (
+                  <label className="block">
+                    <FieldLabel compact>Target node</FieldLabel>
+                    <Select value={targetEntityId} onChange={(event) => setExistingTargetId(event.target.value || null)} required>
+                      <option value=""></option>
+                      {entities
+                        .filter((entity) => entity.id !== sourceEntityId)
+                        .map((entity) => (
+                          <option key={entity.id} value={entity.id}>
+                            {entity.display_name}
+                          </option>
+                        ))}
+                    </Select>
+                  </label>
+                )}
+
+                <label className="block">
+                  <FieldLabel compact>Relationship type</FieldLabel>
+                  <Select value={createLinkRelationshipTypeValue} onChange={(event) => onCreateLinkTypeChange(event.target.value)} required>
+                    {relationshipTypes.map((type) => (
+                      <option key={type.code} value={type.code}>{type.display_name || type.code}</option>
+                    ))}
+                  </Select>
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Source node role</FieldLabel>
+                  {createLinkSourceRoleOptions.length > 0 ? (
+                    <Select value={createLinkSourceRoleValue} onChange={(event) => setNewLinkFromRole(event.target.value)} required>
+                      {createLinkSourceRoleOptions.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input value={newLinkFromRole} onChange={(event) => setNewLinkFromRole(event.target.value)} required />
+                  )}
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Target node role</FieldLabel>
+                  {createLinkTargetRoleOptions.length > 0 ? (
+                    <Select value={createLinkTargetRoleValue} onChange={(event) => setNewLinkToRole(event.target.value)} required>
+                      {createLinkTargetRoleOptions.map((role) => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input value={newLinkToRole} onChange={(event) => setNewLinkToRole(event.target.value)} required />
+                  )}
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Relationship active from</FieldLabel>
+                  <Input type="datetime-local" value={newLinkStart} onChange={(event) => setNewLinkStart(event.target.value)} />
+                </label>
+                <label className="block">
+                  <FieldLabel compact>Relationship active until</FieldLabel>
+                  <Input type="datetime-local" value={newLinkEnd} onChange={(event) => setNewLinkEnd(event.target.value)} />
+                </label>
+                <Button type="submit" disabled={createLinkMutation.isPending}>Create link</Button>
+                {createLinkMutation.error ? (
+                  <Card variant="danger" className="px-3 py-2 text-xs">
+                    Create link failed. Please review inputs and try again.
+                  </Card>
+                ) : null}
+              </Stack>
+            </form>
+          </FormContainer>
+        </Section>
+      ) : (
+        <Card className="px-3 py-2 text-xs text-[var(--console-text-muted)]">Select a node or edge. Use the node + button to create a linked node.</Card>
+      )}
+    </Stack>
+  )
+
+  const canvas = focusEntityId ? (
+    <GraphExplorer
+      graphId={graphId}
+      entityId={focusEntityId}
+      asOf={asOf}
+      includeInactive={includeInactive}
+      depth={graphDepth}
+      layoutMode={layoutMode}
+      refreshKey={graphRefreshKey}
+      selectedEntityId={selectedNodeId}
+      showNodeLabels={showNodeLabels}
+      showRelationshipLabels={showRelationshipLabels}
+      onNodeSelect={(nodeId) => {
+        setSelectedNodeId(nodeId)
+        setSelectedEdge(null)
+        setRightPanelMode("node")
+        void loadNodeDetailIntoEditor(nodeId)
+      }}
+      onEdgeSelect={(edge) => {
+        setSelectedEdge(edge)
+        setSelectedNodeId(null)
+        if (edge) {
+          const connectedFocusId = entities.some((entity) => entity.id === edge.from_entity_id)
+            ? edge.from_entity_id
+            : edge.to_entity_id
+          setFocusOverride(connectedFocusId)
+          setEdgeType(edge.relationship_type)
+          setEdgeFromRole(edge.roles.from)
+          setEdgeToRole(edge.roles.to)
+          setEdgeStart(toLocalDatetimeInputValue(edge.start))
+          setEdgeEnd(edge.end ? toLocalDatetimeInputValue(edge.end) : "")
+          setRightPanelMode("edge")
+        } else {
+          setRightPanelMode(null)
+        }
+      }}
+      onAddLinkedNodeFrom={(nodeId) => {
+        setSourceNodeId(nodeId)
+        setSelectedNodeId(nodeId)
+        setSelectedEdge(null)
+        setCreateMode("new_node")
+        setNewLinkStart("")
+        if (relationshipTypes.length > 0) {
+          const defaultType = relationshipTypes[0]
+          setNewLinkType(defaultType.code)
+          if (defaultType.source_roles.length > 0) {
+            setNewLinkFromRole(defaultType.source_roles[0])
+          }
+          if (defaultType.target_roles.length > 0) {
+            setNewLinkToRole(defaultType.target_roles[0])
+          }
+        }
+        setRightPanelMode("link")
+        setRightExpanded(true)
+      }}
+    />
+  ) : (
+    <div className="h-[68vh] min-h-[520px] rounded-xl border border-dashed border-[var(--console-border)] bg-[var(--console-subpanel)]" />
+  )
+
+  return (
+    <PageLayout className="max-w-[1200px]">
+      <PageHeader
+        title={graphName}
+        action={(
+          <Link
+            href="/graphs"
+            className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-[var(--console-border)] bg-[var(--console-panel)] px-4 py-2.5 text-sm font-medium text-[var(--console-text)] transition-colors hover:bg-[var(--console-panel-muted)]"
+          >
+            Back
+          </Link>
+        )}
+      />
+
+      <Stack className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-stretch gap-3">
+        <PanelShell title="Controls" side="left" expanded={leftExpanded} onToggle={() => setLeftExpanded((value) => !value)}>
+          {controlsPanel}
+        </PanelShell>
+
+        <Section className="mb-0 p-2">
+          {canvas}
+        </Section>
+
+        <PanelShell title="Edit" side="right" expanded={rightExpanded} onToggle={() => setRightExpanded((value) => !value)}>
+          {editPanel}
+        </PanelShell>
+      </Stack>
+    </PageLayout>
+  )
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
+      <path d="M10.5 3.5L6 8l4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
+      <path d="M5.5 3.5L10 8l-4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   )
 }

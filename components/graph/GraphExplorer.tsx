@@ -4,63 +4,43 @@ import { useMutation, useQuery } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 
 import { fetchGraphExpand, fetchGraphView } from "@/lib/api/graph"
-import type { Edge, Entity, GraphResponse } from "@/types"
-import Badge from "@/components/ui/Badge"
+import { EMPTY_GRAPH_STATE, mergeGraphState, toGraphState, type GraphState } from "@/lib/api/graphState"
+import type { Edge } from "@/types"
 import Card from "@/components/ui/Card"
-import SectionHeader from "@/components/ui/SectionHeader"
+import Stack from "@/components/ui/Stack"
 import GraphCanvas from "./GraphCanvas"
-import SidePanel from "./SidePanel"
-import TimeSlider from "./TimeSlider"
 
 type GraphExplorerProps = {
   graphId: string
   entityId: string
-  initialAsOf: string
-}
-
-type GraphState = {
-  entities: Record<string, Entity>
-  edges: Record<string, Edge>
-}
-
-type GraphUiState = {
   asOf: string
-  depth: number
-  filters: {
-    entityTypes: string[]
-    relationshipTypes: string[]
-    includeInactive: boolean
-  }
+  includeInactive: boolean
+  depth?: number
+  layoutMode?: "auto" | "manual"
+  refreshKey?: number
+  selectedEntityId?: string | null
+  showNodeLabels?: boolean
+  showRelationshipLabels?: boolean
+  onNodeSelect?: (entityId: string) => void
+  onEdgeSelect?: (edge: Edge | null) => void
+  onAddLinkedNodeFrom?: (entityId: string) => void
 }
 
-const EMPTY_GRAPH_STATE: GraphState = { entities: {}, edges: {} }
-
-function toGraphState(delta: GraphResponse): GraphState {
-  return {
-    entities: Object.fromEntries(delta.entities.map((entity) => [entity.id, entity])),
-    edges: Object.fromEntries(delta.edges.map((edge) => [edge.id, edge]))
-  }
-}
-
-function mergeGraphState(previous: GraphState, delta: GraphState): GraphState {
-  const nextEntities = { ...previous.entities }
-  for (const entity of Object.values(delta.entities)) {
-    nextEntities[entity.id] = entity
-  }
-
-  const nextEdges = { ...previous.edges }
-  for (const edge of Object.values(delta.edges)) {
-    nextEdges[edge.id] = edge
-  }
-
-  return {
-    entities: nextEntities,
-    edges: nextEdges
-  }
-}
-
-export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphExplorerProps) {
-  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null)
+export default function GraphExplorer({
+  graphId,
+  entityId,
+  asOf,
+  includeInactive,
+  depth = 3,
+  layoutMode = "auto",
+  refreshKey = 0,
+  selectedEntityId = null,
+  showNodeLabels = false,
+  showRelationshipLabels = false,
+  onNodeSelect,
+  onEdgeSelect,
+  onAddLinkedNodeFrom
+}: GraphExplorerProps) {
   const [expandedState, setExpandedState] = useState<{
     scopeKey: string
     graph: GraphState
@@ -68,40 +48,30 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
     scopeKey: "",
     graph: EMPTY_GRAPH_STATE
   })
-  const [uiState, setUiState] = useState<GraphUiState>({
-    asOf: initialAsOf,
-    depth: 1,
-    filters: {
-      entityTypes: [],
-      relationshipTypes: [],
-      includeInactive: false
-    }
-  })
 
-  const scopeKey = `${graphId}|${entityId}|${uiState.asOf}|${uiState.depth}|${uiState.filters.entityTypes.join(",")}|${uiState.filters.relationshipTypes.join(",")}|${uiState.filters.includeInactive}`
+  const scopeKey = `${graphId}|${entityId}|${asOf}|${depth}|${includeInactive}`
 
   const viewQuery = useQuery({
     queryKey: [
       "graph:view",
       graphId,
       entityId,
-      uiState.asOf,
-      uiState.depth,
-      uiState.filters.entityTypes.join(","),
-      uiState.filters.relationshipTypes.join(","),
-      uiState.filters.includeInactive
+      asOf,
+      depth,
+      includeInactive,
+      refreshKey
     ],
     enabled: entityId.length > 0,
     queryFn: async () =>
       fetchGraphView({
         graph_id: graphId,
         center_entity_id: entityId,
-        as_of: uiState.asOf,
-        depth: uiState.depth,
+        as_of: asOf,
+        depth,
         filters: {
-          entity_types: uiState.filters.entityTypes,
-          relationship_types: uiState.filters.relationshipTypes,
-          include_inactive: uiState.filters.includeInactive
+          entity_types: [],
+          relationship_types: [],
+          include_inactive: includeInactive
         },
         already_loaded: {
           entity_ids: [],
@@ -110,9 +80,14 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
       })
   })
 
-  const scopedExpandedGraph =
-    expandedState.scopeKey === scopeKey ? expandedState.graph : EMPTY_GRAPH_STATE
-  const baseGraph = viewQuery.data ? toGraphState(viewQuery.data) : EMPTY_GRAPH_STATE
+  const scopedExpandedGraph = useMemo(
+    () => (expandedState.scopeKey === scopeKey ? expandedState.graph : EMPTY_GRAPH_STATE),
+    [expandedState, scopeKey]
+  )
+  const baseGraph = useMemo(
+    () => (viewQuery.data ? toGraphState(viewQuery.data) : EMPTY_GRAPH_STATE),
+    [viewQuery.data]
+  )
   const graphState = useMemo(
     () => mergeGraphState(baseGraph, scopedExpandedGraph),
     [baseGraph, scopedExpandedGraph]
@@ -123,12 +98,12 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
       fetchGraphExpand({
         graph_id: graphId,
         entity_id: targetEntityId,
-        as_of: uiState.asOf,
-        depth: uiState.depth,
+        as_of: asOf,
+        depth,
         filters: {
-          entity_types: uiState.filters.entityTypes,
-          relationship_types: uiState.filters.relationshipTypes,
-          include_inactive: uiState.filters.includeInactive
+          entity_types: [],
+          relationship_types: [],
+          include_inactive: includeInactive
         },
         already_loaded: {
           entity_ids: Object.keys(graphState.entities),
@@ -150,64 +125,34 @@ export default function GraphExplorer({ graphId, entityId, initialAsOf }: GraphE
 
   const entities = useMemo(() => Object.values(graphState.entities), [graphState.entities])
   const edges = useMemo(() => Object.values(graphState.edges), [graphState.edges])
-
-  const isLoading = viewQuery.isLoading || expandMutation.isPending
   const errorMessage =
     (viewQuery.error as Error | null)?.message ??
     (expandMutation.error as Error | null)?.message ??
     null
 
   return (
-    <section className="grid w-full gap-4 lg:grid-cols-[1fr_280px]">
-      <section className="space-y-4">
-        <Card as="header" className="fade-in p-4 shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <SectionHeader className="text-[#6fe8ff]">Graph Explorer</SectionHeader>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                <Badge>Nodes: {entities.length}</Badge>
-                <Badge>Edges: {edges.length}</Badge>
-                <Badge variant={isLoading ? "accent" : "success"}>{isLoading ? "Syncing..." : "Synced"}</Badge>
-              </div>
-            </div>
-
-            <div className="min-w-0 flex-1 lg:max-w-[420px]">
-              <TimeSlider
-                asOf={uiState.asOf}
-                onChange={(nextAsOf) => {
-                  setUiState((previous) => ({ ...previous, asOf: nextAsOf }))
-                }}
-              />
-            </div>
-          </div>
-        </Card>
-
-        {errorMessage ? (
-          <Card variant="danger" className="p-3 text-sm">
-            {errorMessage}
-          </Card>
-        ) : null}
-
-        <Card className="p-3 shadow-[0_12px_30px_rgba(0,0,0,0.45)]">
-          <GraphCanvas
-            entities={entities}
-            edges={edges}
-            selectedEntityId={selectedEntityId}
-            onNodeClick={(clickedEntityId) => {
-              setSelectedEntityId(clickedEntityId)
-              expandMutation.mutate(clickedEntityId)
-            }}
-          />
-        </Card>
-      </section>
-
-      <div className="lg:sticky lg:top-4 lg:self-start">
-        <SidePanel
-          selectedEntityId={selectedEntityId}
-          nodeCount={entities.length}
-          edgeCount={edges.length}
-        />
-      </div>
-    </section>
+    <Stack className="relative h-full min-h-[520px] gap-0">
+      <GraphCanvas
+        entities={entities}
+        edges={edges}
+        layoutMode={layoutMode}
+        selectedEntityId={selectedEntityId}
+        showNodeLabels={showNodeLabels}
+        showRelationshipLabels={showRelationshipLabels}
+        onNodeClick={(clickedEntityId) => {
+          onNodeSelect?.(clickedEntityId)
+          expandMutation.mutate(clickedEntityId)
+        }}
+        onEdgeClick={(clickedRelationshipId) => {
+          onEdgeSelect?.(graphState.edges[clickedRelationshipId] ?? null)
+        }}
+        onAddLinkedNodeFrom={onAddLinkedNodeFrom}
+      />
+      {errorMessage ? (
+        <Stack className="pointer-events-none absolute bottom-3 right-3 gap-0">
+          <Card variant="danger" className="px-2 py-1 text-xs">Error</Card>
+        </Stack>
+      ) : null}
+    </Stack>
   )
 }

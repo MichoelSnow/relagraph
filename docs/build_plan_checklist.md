@@ -93,8 +93,7 @@ References: `docs/api_spec.md`, `docs/graph_projection_contract.md`
 Implement in `/app/api/v1/...` or `/server/api/...`:
 
 - [x] `POST /api/v1/auth/register`.
-- [x] `POST /api/v1/auth/login`.
-- [x] `POST /api/v1/auth/logout`.
+- [x] NextAuth credential/session routes under `/api/auth/*`.
 - [x] `GET /api/v1/auth/me`.
 - [x] `GET /api/v1/graphs` and `POST /api/v1/graphs`.
 - [x] `POST /api/v1/graphs/:graphId/graph/view`.
@@ -178,15 +177,15 @@ Implement minimal UI forms and API wiring for:
 
 - [ ] Create Entity flow:
 - [x] `POST /api/v1/graphs/:graphId/entities`.
-- [ ] Refresh graph or merge returned entity per flow rules.
+- [x] Refresh graph or merge returned entity per flow rules.
 
 - [ ] Create Relationship flow:
 - [x] `POST /api/v1/graphs/:graphId/relationships`.
 - [x] `POST /api/v1/graphs/:graphId/relationships/:id/intervals`.
-- [ ] Refetch graph or merge delta per flow rules.
+- [x] Refetch graph or merge delta per flow rules.
 
 Phase gate:
-- [ ] User can create entity and relationship from UI and see graph state update correctly.
+- [x] User can create entity and relationship from UI and see graph state update correctly.
 
 ---
 

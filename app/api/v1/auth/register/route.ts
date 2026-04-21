@@ -6,15 +6,29 @@ import { NextResponse } from "next/server"
 import { hashPassword } from "@/lib/auth/password"
 import { getDb } from "@/db/client"
 import { appUser } from "@/db/schema"
+import { requireCsrfProtection } from "@/server/api/csrf"
 import { isJsonRequest, jsonError } from "@/server/api/http"
-import { createUserSession, setSessionCookie } from "@/server/auth/session"
+import { enforceRateLimitByRequest } from "@/server/api/rate_limit"
 
 type RegisterRequest = {
-  email?: string
+  username?: string
   password?: string
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
+  const csrfError = requireCsrfProtection(request)
+  if (csrfError) {
+    return csrfError
+  }
+  const rateLimitError = enforceRateLimitByRequest(request, {
+    scope: "auth:register",
+    limit: 5,
+    windowMs: 10 * 60_000
+  })
+  if (rateLimitError) {
+    return rateLimitError
+  }
+
   if (!isJsonRequest(request)) {
     return jsonError(415, "unsupported_media_type", "Content-Type must be application/json")
   }
@@ -26,11 +40,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     return jsonError(400, "invalid_json", "Request body must be valid JSON")
   }
 
-  const email = body.email?.trim().toLowerCase() ?? ""
+  const username = body.username?.trim().toLowerCase() ?? ""
   const password = body.password ?? ""
 
-  if (!email || !email.includes("@")) {
-    return jsonError(400, "invalid_request", "email must be valid")
+  if (!username) {
+    return jsonError(400, "invalid_request", "username is required")
   }
 
   if (password.length < 8) {
@@ -38,24 +52,27 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const db = getDb()
-  const existing = await db.select({ id: appUser.id }).from(appUser).where(eq(appUser.email, email)).limit(1)
+  const existing = await db
+    .select({ id: appUser.id })
+    .from(appUser)
+    .where(eq(appUser.email, username))
+    .limit(1)
   if (existing.length > 0) {
-    return jsonError(409, "email_in_use", "An account with this email already exists")
+    return jsonError(409, "username_in_use", "An account with this username already exists")
   }
 
   const userId = randomUUID()
   await db.insert(appUser).values({
     id: userId,
-    email,
+    email: username,
     passwordHash: hashPassword(password)
   })
 
-  const session = await createUserSession(userId)
-  const response = NextResponse.json({
-    id: userId,
-    email
-  }, { status: 201 })
-  setSessionCookie(response, session.token, session.expiresAt)
-
-  return response
+  return NextResponse.json(
+    {
+      id: userId,
+      username
+    },
+    { status: 201 }
+  )
 }

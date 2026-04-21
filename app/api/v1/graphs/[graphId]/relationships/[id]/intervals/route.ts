@@ -6,6 +6,7 @@ import { NextResponse } from "next/server"
 import { getDb } from "@/db/client"
 import { relationship, relationshipInterval } from "@/db/schema"
 import { requireApiGraphAccess } from "@/server/api/auth"
+import { requireCsrfProtection } from "@/server/api/csrf"
 import { isIsoTimestamp, isJsonRequest, jsonError } from "@/server/api/http"
 import type { RelationshipInterval } from "@/types"
 
@@ -19,6 +20,11 @@ type RouteContext = {
 }
 
 export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
+  const csrfError = requireCsrfProtection(request)
+  if (csrfError) {
+    return csrfError
+  }
+
   const { graphId, id } = await context.params
   const auth = await requireApiGraphAccess(graphId)
   if (!auth.user) {

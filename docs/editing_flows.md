@@ -88,6 +88,19 @@ After any mutation:
 
 ---
 
+## 7. Edit Existing Node / Edge
+
+### Edit node
+1. PATCH `/graphs/:graphId/entities/:id`
+2. Refetch `/graphs/:graphId/graph/view` for current focus/time
+
+### Edit edge
+1. PATCH `/graphs/:graphId/relationships/:id`
+2. POST `/graphs/:graphId/relationships/:id/intervals` (when updating active time range)
+3. Refetch `/graphs/:graphId/graph/view` for current focus/time
+
+---
+
 ## Summary
 
 These flows ensure:

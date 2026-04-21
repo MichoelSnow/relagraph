@@ -5,7 +5,9 @@ import { NextResponse } from "next/server"
 
 import { getDb } from "@/db/client"
 import { entity, relationship, relationshipParticipant, relationshipType } from "@/db/schema"
+import { normalizeRelationshipTypeCode } from "@/lib/graph/relationshipType"
 import { requireApiGraphAccess } from "@/server/api/auth"
+import { requireCsrfProtection } from "@/server/api/csrf"
 import { isJsonRequest, jsonError } from "@/server/api/http"
 import type { RelationshipParticipant } from "@/types"
 
@@ -21,7 +23,22 @@ type RouteContext = {
   params: Promise<{ graphId: string }>
 }
 
+const RELATIONSHIP_TYPE_PRESETS: Record<
+  string,
+  { displayName: string; isDirected: boolean; category: string | null }
+> = {
+  parent_child: { displayName: "Parent-Child", isDirected: true, category: "family" },
+  romantic: { displayName: "Romantic", isDirected: false, category: "relationship" },
+  animal: { displayName: "Animal", isDirected: false, category: "animal" },
+  sibling: { displayName: "Sibling", isDirected: false, category: "family" }
+}
+
 export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
+  const csrfError = requireCsrfProtection(request)
+  if (csrfError) {
+    return csrfError
+  }
+
   const { graphId } = await context.params
   const auth = await requireApiGraphAccess(graphId)
   if (!auth.user) {
@@ -64,12 +81,40 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
 
   const db = getDb()
   const relationshipTypeCode = body.relationship_type.trim()
+  const normalizedTypeCode = normalizeRelationshipTypeCode(relationshipTypeCode)
 
-  const [typeRecord] = await db
+  let resolvedRelationshipTypeCode = relationshipTypeCode
+  let [typeRecord] = await db
     .select({ id: relationshipType.id })
     .from(relationshipType)
     .where(eq(relationshipType.code, relationshipTypeCode))
     .limit(1)
+
+  if (!typeRecord) {
+    const preset = RELATIONSHIP_TYPE_PRESETS[normalizedTypeCode]
+    if (preset) {
+      await db
+        .insert(relationshipType)
+        .values({
+          id: randomUUID(),
+          code: normalizedTypeCode,
+          displayName: preset.displayName,
+          isDirected: preset.isDirected,
+          category: preset.category,
+          allowsMultipleParticipants: false
+        })
+        .onConflictDoNothing()
+
+      ;[typeRecord] = await db
+        .select({ id: relationshipType.id })
+        .from(relationshipType)
+        .where(eq(relationshipType.code, normalizedTypeCode))
+        .limit(1)
+      if (typeRecord) {
+        resolvedRelationshipTypeCode = normalizedTypeCode
+      }
+    }
+  }
 
   if (!typeRecord) {
     return jsonError(
@@ -127,7 +172,7 @@ export async function POST(request: Request, context: RouteContext): Promise<Nex
   return NextResponse.json(
     {
       id: relationshipId,
-      relationship_type: relationshipTypeCode,
+      relationship_type: resolvedRelationshipTypeCode,
       participants
     },
     { status: 201 }
