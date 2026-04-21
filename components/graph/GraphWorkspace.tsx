@@ -355,13 +355,13 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
     if (!selectedEdge) {
       return ""
     }
-    return entities.find((entity) => entity.id === selectedEdge.from_entity_id)?.display_name ?? selectedEdge.from_entity_id
+    return entities.find((entity) => entity.id === selectedEdge.from_entity_id)?.display_name ?? "Unknown source node"
   }, [entities, selectedEdge])
   const selectedEdgeTargetName = useMemo(() => {
     if (!selectedEdge) {
       return ""
     }
-    return entities.find((entity) => entity.id === selectedEdge.to_entity_id)?.display_name ?? selectedEdge.to_entity_id
+    return entities.find((entity) => entity.id === selectedEdge.to_entity_id)?.display_name ?? "Unknown target node"
   }, [entities, selectedEdge])
 
   const sourceEntityId = useMemo(() => {
@@ -1147,7 +1147,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
                 <Button type="submit" disabled={createLinkMutation.isPending}>Create link</Button>
                 {createLinkMutation.error ? (
                   <Card variant="danger" className="px-3 py-2 text-xs">
-                    {(createLinkMutation.error as Error).message}
+                    Create link failed. Please review inputs and try again.
                   </Card>
                 ) : null}
               </Stack>
@@ -1182,6 +1182,10 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
         setSelectedEdge(edge)
         setSelectedNodeId(null)
         if (edge) {
+          const connectedFocusId = entities.some((entity) => entity.id === edge.from_entity_id)
+            ? edge.from_entity_id
+            : edge.to_entity_id
+          setFocusOverride(connectedFocusId)
           setEdgeType(edge.relationship_type)
           setEdgeFromRole(edge.roles.from)
           setEdgeToRole(edge.roles.to)

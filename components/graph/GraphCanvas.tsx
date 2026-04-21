@@ -4,6 +4,7 @@ import cytoscape, { type ElementDefinition } from "cytoscape"
 import { useEffect, useMemo, useRef } from "react"
 
 import type { Edge, Entity } from "@/types"
+import { normalizeRelationshipTypeCode } from "@/lib/graph/relationshipType"
 import { graphTheme, resolveGraphTheme, type ResolvedGraphTheme } from "@/lib/ui/graphTheme"
 
 type GraphCanvasProps = {
@@ -18,12 +19,8 @@ type GraphCanvasProps = {
   onAddLinkedNodeFrom?: (entityId: string) => void
 }
 
-function normalizeRelationshipType(value: string): string {
-  return value.trim().toLowerCase().replace(/[\s-]+/g, "_")
-}
-
 function colorForRelationshipType(value: string): string {
-  const normalized = normalizeRelationshipType(value)
+  const normalized = normalizeRelationshipTypeCode(value)
   if (normalized === "parent_child") {
     return "#2563eb"
   }
@@ -67,7 +64,7 @@ function resolveHierarchyConstraint(edge: Edge): { higherEntityId: string; lower
 }
 
 function isSameLevelRelationship(edge: Edge): boolean {
-  const relationshipType = normalizeRelationshipType(edge.relationship_type)
+  const relationshipType = normalizeRelationshipTypeCode(edge.relationship_type)
   if (relationshipType === "sibling" || relationshipType === "romantic") {
     return true
   }
@@ -299,7 +296,7 @@ export default function GraphCanvas({
         source: edge.from_entity_id,
         target: edge.to_entity_id,
         relationshipType: edge.relationship_type,
-        relationshipGroup: normalizeRelationshipType(edge.relationship_type),
+        relationshipGroup: normalizeRelationshipTypeCode(edge.relationship_type),
         lineColor: colorForRelationshipType(edge.relationship_type),
         active: edge.active ? "true" : "false"
       }

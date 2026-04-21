@@ -1,13 +1,5 @@
 import type { Entity } from "@/types"
 
-type ApiErrorEnvelope = {
-  error: {
-    code: string
-    message: string
-    details?: Record<string, unknown>
-  }
-}
-
 type GraphSummary = {
   id: string
   name: string
@@ -15,10 +7,32 @@ type GraphSummary = {
   updated_at: string
 }
 
+function publicErrorMessage(status: number): string {
+  if (status === 400 || status === 422) {
+    return "Request could not be processed."
+  }
+  if (status === 401 || status === 403) {
+    return "You are not authorized to perform this action."
+  }
+  if (status === 404) {
+    return "Requested resource was not found."
+  }
+  if (status === 409) {
+    return "Request could not be completed due to a conflict."
+  }
+  if (status === 429) {
+    return "Too many requests. Please try again later."
+  }
+  if (status >= 500) {
+    return "Server error. Please try again."
+  }
+  return "Request failed."
+}
+
 async function parseOrThrow(response: Response): Promise<unknown> {
   if (!response.ok) {
-    const errorBody = (await response.json().catch(() => null)) as ApiErrorEnvelope | null
-    throw new Error(errorBody?.error?.message ?? `Request failed with status ${response.status}`)
+    await response.json().catch(() => null)
+    throw new Error(publicErrorMessage(response.status))
   }
 
   return response.json()

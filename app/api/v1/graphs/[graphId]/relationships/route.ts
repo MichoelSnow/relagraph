@@ -5,6 +5,7 @@ import { NextResponse } from "next/server"
 
 import { getDb } from "@/db/client"
 import { entity, relationship, relationshipParticipant, relationshipType } from "@/db/schema"
+import { normalizeRelationshipTypeCode } from "@/lib/graph/relationshipType"
 import { requireApiGraphAccess } from "@/server/api/auth"
 import { requireCsrfProtection } from "@/server/api/csrf"
 import { isJsonRequest, jsonError } from "@/server/api/http"
@@ -30,10 +31,6 @@ const RELATIONSHIP_TYPE_PRESETS: Record<
   romantic: { displayName: "Romantic", isDirected: false, category: "relationship" },
   animal: { displayName: "Animal", isDirected: false, category: "animal" },
   sibling: { displayName: "Sibling", isDirected: false, category: "family" }
-}
-
-function normalizeRelationshipTypeCode(value: string): string {
-  return value.trim().toLowerCase().replace(/[\s-]+/g, "_")
 }
 
 export async function POST(request: Request, context: RouteContext): Promise<NextResponse> {
