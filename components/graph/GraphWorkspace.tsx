@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Link from "next/link"
-import { FormEvent, useEffect, useMemo, useState } from "react"
+import { FormEvent, useCallback, useMemo, useState, useSyncExternalStore } from "react"
 
 import {
   createGraphEntity,
@@ -12,7 +12,6 @@ import {
   type GraphEntityDetail,
   fetchGraphEntityDetail,
   fetchGraphEntities,
-  fetchRelationshipTypes,
   updateGraphEntity,
   updateRelationship
 } from "@/lib/api/graphs"
@@ -69,9 +68,18 @@ type PlaceProfileInput = {
 }
 
 type EntityNameRecord = GraphEntityDetail["entity_names"][number]
+type RelationshipTypePreset = {
+  code: string
+  display_name: string
+  category: string | null
+  source_roles: string[]
+  target_roles: string[]
+  used: boolean
+}
 
 const LEFT_PANEL_KEY = "relagraph:workspace:left-panel-expanded"
 const RIGHT_PANEL_KEY = "relagraph:workspace:right-panel-expanded"
+const PANEL_STORAGE_EVENT = "relagraph:panel-storage"
 const TEMPORAL_SIMPLE_MODE = true
 const DEFAULT_RELATIONSHIP_START = "1900-01-01T00:00:00.000Z"
 const NAME_TYPE_OPTIONS = ["legal", "birth", "chosen", "nickname", "maiden", "alias", "religious"] as const
@@ -104,6 +112,40 @@ const GENDER_IDENTITY_OPTIONS = [
   "other",
   "prefer not to say"
 ] as const
+const RELATIONSHIP_TYPE_PRESETS: RelationshipTypePreset[] = [
+  {
+    code: "parent_child",
+    display_name: "Parent-Child",
+    category: null,
+    source_roles: ["parent", "child"],
+    target_roles: ["parent", "child"],
+    used: false
+  },
+  {
+    code: "romantic",
+    display_name: "Romantic",
+    category: null,
+    source_roles: ["spouse", "partner", "husband", "wife", "boyfriend", "girlfriend", "it's complicated"],
+    target_roles: ["spouse", "partner", "husband", "wife", "boyfriend", "girlfriend", "it's complicated"],
+    used: false
+  },
+  {
+    code: "animal",
+    display_name: "Animal",
+    category: null,
+    source_roles: ["owner", "parent", "pet", "friend", "animal"],
+    target_roles: ["owner", "parent", "pet", "friend", "animal"],
+    used: false
+  },
+  {
+    code: "sibling",
+    display_name: "Sibling",
+    category: null,
+    source_roles: ["sibling", "step-sibling", "half-sibling", "adopted sibling", "foster sibling"],
+    target_roles: ["sibling", "step-sibling", "half-sibling", "adopted sibling", "foster sibling"],
+    used: false
+  }
+]
 
 function readBoolean(key: string, fallback: boolean): boolean {
   if (typeof window === "undefined") {
@@ -116,6 +158,44 @@ function readBoolean(key: string, fallback: boolean): boolean {
   }
 
   return stored === "1"
+}
+
+type BooleanUpdater = boolean | ((previous: boolean) => boolean)
+
+function useStoredBoolean(key: string, fallback: boolean): [boolean, (next: BooleanUpdater) => void] {
+  const subscribe = useCallback((onStoreChange: () => void) => {
+    if (typeof window === "undefined") {
+      return () => {}
+    }
+    const handleStoreChange = () => onStoreChange()
+    window.addEventListener("storage", handleStoreChange)
+    window.addEventListener(PANEL_STORAGE_EVENT, handleStoreChange)
+    return () => {
+      window.removeEventListener("storage", handleStoreChange)
+      window.removeEventListener(PANEL_STORAGE_EVENT, handleStoreChange)
+    }
+  }, [])
+
+  const value = useSyncExternalStore(
+    subscribe,
+    () => readBoolean(key, fallback),
+    () => fallback
+  )
+
+  const setValue = useCallback(
+    (next: BooleanUpdater) => {
+      if (typeof window === "undefined") {
+        return
+      }
+      const previous = readBoolean(key, fallback)
+      const resolved = typeof next === "function" ? next(previous) : next
+      window.localStorage.setItem(key, resolved ? "1" : "0")
+      window.dispatchEvent(new Event(PANEL_STORAGE_EVENT))
+    },
+    [fallback, key]
+  )
+
+  return [value, setValue]
 }
 
 function toLocalDatetimeInputValue(iso: string): string {
@@ -205,8 +285,8 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   const [showRelationshipLabels, setShowRelationshipLabels] = useState(false)
   const [layoutMode, setLayoutMode] = useState<"auto" | "manual">("auto")
   const [includeInactive, setIncludeInactive] = useState(TEMPORAL_SIMPLE_MODE)
-  const [leftExpanded, setLeftExpanded] = useState(() => readBoolean(LEFT_PANEL_KEY, true))
-  const [rightExpanded, setRightExpanded] = useState(() => readBoolean(RIGHT_PANEL_KEY, true))
+  const [leftExpanded, setLeftExpanded] = useStoredBoolean(LEFT_PANEL_KEY, true)
+  const [rightExpanded, setRightExpanded] = useStoredBoolean(RIGHT_PANEL_KEY, true)
   const [isNodeDetailLoading, setIsNodeDetailLoading] = useState(false)
 
   const [nodeKind, setNodeKind] = useState<"person" | "animal" | "place">("person")
@@ -263,31 +343,13 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
 
   const queryClient = useQueryClient()
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return
-    }
-    window.localStorage.setItem(LEFT_PANEL_KEY, leftExpanded ? "1" : "0")
-  }, [leftExpanded])
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return
-    }
-    window.localStorage.setItem(RIGHT_PANEL_KEY, rightExpanded ? "1" : "0")
-  }, [rightExpanded])
-
   const entitiesQuery = useQuery({
     queryKey: ["graph:entities", graphId],
     queryFn: () => fetchGraphEntities(graphId)
   })
-  const relationshipTypesQuery = useQuery({
-    queryKey: ["graph:relationship-types", graphId],
-    queryFn: () => fetchRelationshipTypes(graphId)
-  })
 
   const entities = useMemo(() => entitiesQuery.data ?? [], [entitiesQuery.data])
-  const relationshipTypes = useMemo(() => relationshipTypesQuery.data ?? [], [relationshipTypesQuery.data])
+  const relationshipTypes = useMemo(() => RELATIONSHIP_TYPE_PRESETS, [])
   const createLinkRelationshipTypeValue = useMemo(() => {
     if (newLinkType && relationshipTypes.some((type) => type.code === newLinkType)) {
       return newLinkType

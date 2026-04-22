@@ -228,6 +228,41 @@ Request:
 }
 ```
 
+### GET `/graphs/:graphId/entities/:id`
+Get one entity detail in one graph.
+
+Response (`200`):
+```json
+{
+  "id": "uuid",
+  "entity_kind": "person",
+  "display_name": "Alex",
+  "entity_name": {
+    "name_text": "Alex",
+    "name_type": "legal",
+    "language_code": "en",
+    "script_code": null,
+    "notes": null,
+    "is_primary": true,
+    "sort_order": null,
+    "start_date": null,
+    "end_date": null
+  },
+  "entity_names": [],
+  "profile": {}
+}
+```
+
+### DELETE `/graphs/:graphId/entities/:id`
+Delete one entity in one graph. Connected relationships are also removed.
+
+Response (`200`):
+```json
+{
+  "ok": true
+}
+```
+
 ---
 
 ## Relationships

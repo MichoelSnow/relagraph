@@ -141,3 +141,4 @@ You MUST read and follow all files in this directory before making any changes.
 - Clean up failed or partial implementations before retrying
 - Before removing fields from schemas, verify all dependencies
 - Only use Context7 MCP when explicitly asked
+- Do not run pnpm dev or pnpm build in the sandbox

@@ -15,10 +15,10 @@ This checklist is derived from and constrained by:
 
 ## Global Non-Negotiables
 
-- [ ] Do not redesign or modify DB schema from `docs/sql_schema.md`.
-- [ ] Do not change canonical DTO shapes from `docs/canonical_dtos.md`.
-- [ ] Do not invent endpoints outside `docs/api_spec.md`.
-- [ ] Keep graph traversal/filter/time logic on backend per `docs/graph_projection_contract.md`.
+- [x] Do not redesign or modify DB schema from `docs/sql_schema.md`.
+- [x] Do not change canonical DTO shapes from `docs/canonical_dtos.md`.
+- [x] Do not invent endpoints outside `docs/api_spec.md`.
+- [x] Keep graph traversal/filter/time logic on backend per `docs/graph_projection_contract.md`.
 - [ ] If a requirement is unclear, pause and ask for clarification before implementing.
 
 ---
@@ -175,11 +175,11 @@ References: `docs/editing_flows.md`, `docs/api_spec.md`
 
 Implement minimal UI forms and API wiring for:
 
-- [ ] Create Entity flow:
+- [x] Create Entity flow:
 - [x] `POST /api/v1/graphs/:graphId/entities`.
 - [x] Refresh graph or merge returned entity per flow rules.
 
-- [ ] Create Relationship flow:
+- [x] Create Relationship flow:
 - [x] `POST /api/v1/graphs/:graphId/relationships`.
 - [x] `POST /api/v1/graphs/:graphId/relationships/:id/intervals`.
 - [x] Refetch graph or merge delta per flow rules.
@@ -193,27 +193,27 @@ Phase gate:
 
 References: all docs above
 
-- [ ] Confirm no undocumented endpoint was added.
-- [ ] Confirm no DTO variants diverge from canonical definitions.
-- [ ] Confirm no frontend interval-resolution/traversal logic was introduced.
-- [ ] Confirm DB schema remains unchanged from SQL spec.
-- [ ] Record any unresolved ambiguity and stop for clarification if present.
+- [x] Confirm no undocumented endpoint was added.
+- [x] Confirm no DTO variants diverge from canonical definitions.
+- [x] Confirm no frontend interval-resolution/traversal logic was introduced.
+- [x] Confirm DB schema remains unchanged from SQL spec.
+- [x] Record any unresolved ambiguity and stop for clarification if present.
 
 Phase gate:
-- [ ] Internal compliance review complete with zero contract violations.
+- [x] Internal compliance review complete with zero contract violations.
 
 ---
 
 ## Phase 11: Final Deliverables Verification
 
-- [ ] Project runs locally.
-- [ ] Local/dev profile is documented and reproducible on a fresh machine.
-- [ ] DB migrations work on clean DB.
-- [ ] `/api/v1/graphs/:graphId/graph/view` returns valid `GraphResponse` payload.
-- [ ] Basic graph renders in UI on `/graphs/[graphId]`.
-- [ ] End-to-end flow works for create entity + create relationship + retrieve graph view.
-- [ ] Prod profile variables and deployment configuration contract are documented.
+- [x] Project runs locally.
+- [x] Local/dev profile is documented and reproducible on a fresh machine.
+- [x] DB migrations work on clean DB.
+- [x] `/api/v1/graphs/:graphId/graph/view` returns valid `GraphResponse` payload.
+- [x] Basic graph renders in UI on `/graphs/[graphId]`.
+- [x] End-to-end flow works for create entity + create relationship + retrieve graph view.
+- [x] Prod profile variables and deployment configuration contract are documented.
 
 Completion criteria:
-- [ ] All phase gates checked.
-- [ ] No deviation from source docs.
+- [x] All phase gates checked.
+- [x] No deviation from source docs.
