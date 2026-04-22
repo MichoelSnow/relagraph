@@ -13,34 +13,34 @@ Do NOT add sections. Do NOT write long prose.
 
 ## Current Objective
 (1–2 sentences max)
-- Stabilize desktop-first graph workspace UX and complete editable node/edge workflows from canvas interactions.
-- Align editing behavior with newly added update APIs and verify end-to-end mutation + graph refresh behavior.
+- Close remaining runtime verification gate in `docs/build_plan_checklist.md` and finish final phase-gate checkoff.
+- Keep API/docs/contracts aligned with no undocumented endpoints.
 
 ---
 
 ## Completed This Session
 (max 5 bullets)
-- Refactored `/graphs/[graphId]` to a strict desktop 3-panel workspace with collapsible left/right rails (controls/canvas/edit).
-- Implemented Phase 9 UI wiring for create entity + create relationship + interval with graph refresh key invalidation.
-- Added update APIs and client calls: `PATCH /graphs/:graphId/entities/:id` and `PATCH /graphs/:graphId/relationships/:id`.
-- Added canvas node `+` affordance to preselect source node and open linked-node creation flow in right panel.
-- Removed redundant inner section headings (`Controls`, `Edit`) from panel content and removed obsolete `SidePanel` component.
+- Removed undocumented API route `GET /api/v1/graphs/:graphId/relationship-types`.
+- Replaced relationship-type fetching in `GraphWorkspace` with local presets to preserve edge/link edit UX without undocumented endpoint reliance.
+- Updated `docs/api_spec.md` to document implemented `GET` and `DELETE /graphs/:graphId/entities/:id` endpoints.
+- Documented v1 edge `+` policy in `docs/editing_flows.md` (edge interaction is edit-only; creation is node `+` only).
+- Updated `docs/build_plan_checklist.md` and closed Phase 9/10 checks; Phase 11 now only blocked on local runtime verification.
 
 ---
 
 ## In Progress / Open
 (max 5 bullets)
-- Validate updated editing UX manually (node edit, edge edit, create linked node, link existing node) on real browser flows.
-- Confirm whether edge `+` should remain absent (current model uses binary edges only, so no single-ended edge state exists).
+- `docs/build_plan_checklist.md`: `Project runs locally` remains unchecked.
+- `docs/build_plan_checklist.md`: `All phase gates checked` remains unchecked pending local runtime verification.
+- Runtime verification commands requiring port/process binding (`pnpm dev`, `pnpm build`) were blocked in sandbox; escalation request was declined.
 
 ---
 
 ## Next Concrete Steps
 (ordered, actionable, max 5)
-1. Manually test canvas-driven workflows on `/graphs/[graphId]` and capture any UX defects.
-2. Decide and implement final edge `+` policy for branch creation UX (or document intentionally unsupported).
-3. Run `pnpm build` locally and verify no runtime regressions after API/UI changes.
-4. Re-audit against `agents.md`, `architecture.md`, `design_system.md`, `security_baseline.md`, `ui_patterns.md`, `ui_scaffold.md`.
+1. Run `pnpm dev` outside sandbox and confirm the app boots locally.
+2. Run `pnpm build` outside sandbox and confirm production build succeeds.
+3. If both pass, check `Project runs locally` and `All phase gates checked` in `docs/build_plan_checklist.md`.
 
 ---
 
@@ -50,25 +50,23 @@ Branch:
 - `feature/ai-spec-integration`
 
 Modified Files:
-- `components/graph/GraphCanvas.tsx`
-- `components/graph/GraphExplorer.tsx`
+- `app/api/v1/graphs/[graphId]/relationship-types/route.ts` (deleted)
 - `components/graph/GraphWorkspace.tsx`
-- `components/graph/SidePanel.tsx` (deleted)
 - `docs/api_spec.md`
 - `docs/build_plan_checklist.md`
+- `tsconfig.json`
+- `lib/api/graphs.ts`
 - `docs/core/session_state.md`
 - `docs/editing_flows.md`
-- `lib/api/graphs.ts`
-- `app/api/v1/graphs/[graphId]/entities/[id]/route.ts` (new)
-- `app/api/v1/graphs/[graphId]/relationships/[id]/route.ts` (new)
 
 Uncommitted Changes:
-- Present across the files listed above; no commit created in this session.
+- Present in the files listed above; no commit created in this session.
 
 Notes:
 (max 3 bullets, only critical info)
-- `pnpm lint && pnpm typecheck` currently pass after API + workspace + canvas changes.
-- API spec/docs were updated to include the new PATCH endpoints and edit flow notes.
+- Latest `pnpm lint` and `pnpm typecheck` pass after route removal and typegen refresh.
+- `pnpm dev` and `pnpm build` could not be completed in this environment due denied escalation for port/process permissions.
+- `docs/build_plan_checklist.md` has 3 remaining unchecked items.
 
 ---
 

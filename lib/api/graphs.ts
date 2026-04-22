@@ -158,15 +158,6 @@ export type GraphEntityDetail = Entity & {
   profile: Record<string, unknown> | null
 }
 
-export type RelationshipTypeOption = {
-  code: string
-  display_name: string
-  category: string | null
-  source_roles: string[]
-  target_roles: string[]
-  used: boolean
-}
-
 export async function createRelationship(
   graphId: string,
   input: CreateRelationshipInput
@@ -233,18 +224,6 @@ export async function deleteGraphEntity(
     method: "DELETE"
   })
   await parseOrThrow(response)
-}
-
-export async function fetchRelationshipTypes(
-  graphId: string
-): Promise<RelationshipTypeOption[]> {
-  const response = await fetch(`/api/v1/graphs/${graphId}/relationship-types`, {
-    method: "GET"
-  })
-  const payload = (await parseOrThrow(response)) as {
-    relationship_types: RelationshipTypeOption[]
-  }
-  return payload.relationship_types
 }
 
 export async function updateRelationship(

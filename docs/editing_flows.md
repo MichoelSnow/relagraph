@@ -99,6 +99,11 @@ After any mutation:
 2. POST `/graphs/:graphId/relationships/:id/intervals` (when updating active time range)
 3. Refetch `/graphs/:graphId/graph/view` for current focus/time
 
+### Edge `+` policy (v1)
+- Edge-level `+` action is intentionally unsupported in v1.
+- Relationship creation is supported from node context only (node `+` flow).
+- Existing edge interaction is edit-only via the right panel.
+
 ---
 
 ## Summary
