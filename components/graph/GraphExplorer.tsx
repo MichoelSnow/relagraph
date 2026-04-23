@@ -5,6 +5,12 @@ import { useEffect, useMemo, useState } from "react"
 
 import { fetchGraphExpand, fetchGraphView } from "@/lib/api/graph"
 import { EMPTY_GRAPH_STATE, toGraphState, type GraphState } from "@/lib/api/graphState"
+import {
+  applyNodeClickToExpandedState,
+  buildExplorerScopeKey,
+  resolveVisibleGraphState,
+  shouldExpandNode
+} from "@/lib/graph/explorerState"
 import type { Edge, Entity } from "@/types"
 import Card from "@/components/ui/Card"
 import Stack from "@/components/ui/Stack"
@@ -64,7 +70,14 @@ export default function GraphExplorer({
     graphByEntityId: {}
   })
 
-  const scopeKey = `${graphId}|${activeCenterEntityId}|${viewMode}|${asOf}|${depth}|${includeInactive}`
+  const scopeKey = buildExplorerScopeKey({
+    graphId,
+    activeCenterEntityId,
+    viewMode,
+    asOf,
+    depth,
+    includeInactive
+  })
 
   const viewQuery = useQuery({
     queryKey: [
@@ -97,33 +110,14 @@ export default function GraphExplorer({
       })
   })
 
-  const scopedExpandedGraph = useMemo(
-    () => {
-      if (expandedState.scopeKey !== scopeKey) {
-        return EMPTY_GRAPH_STATE
-      }
-      const activeEntityId = expandedState.activeEntityId
-      if (!activeEntityId) {
-        return EMPTY_GRAPH_STATE
-      }
-      return expandedState.graphByEntityId[activeEntityId] ?? EMPTY_GRAPH_STATE
-    },
-    [expandedState, scopeKey]
-  )
   const baseGraph = useMemo(
     () => (viewQuery.data ? toGraphState(viewQuery.data) : EMPTY_GRAPH_STATE),
     [viewQuery.data]
   )
-  const graphState = useMemo(() => {
-    const hasActiveExpansion =
-      expandedState.scopeKey === scopeKey &&
-      expandedState.activeEntityId !== null &&
-      expandedState.graphByEntityId[expandedState.activeEntityId] !== undefined
-    if (hasActiveExpansion) {
-      return scopedExpandedGraph
-    }
-    return baseGraph
-  }, [baseGraph, expandedState, scopedExpandedGraph, scopeKey])
+  const graphState = useMemo(
+    () => resolveVisibleGraphState(baseGraph, expandedState, scopeKey),
+    [baseGraph, expandedState, scopeKey]
+  )
 
   const expandMutation = useMutation({
     mutationFn: async (targetEntityId: string) =>
@@ -179,16 +173,12 @@ export default function GraphExplorer({
         showRelationshipLabels={showRelationshipLabels}
         onNodeClick={(clickedEntityId) => {
           onNodeSelect?.(clickedEntityId)
-          const scopedGraphByEntityId =
-            expandedState.scopeKey === scopeKey ? expandedState.graphByEntityId : {}
-          setExpandedState((previous) => ({
-            scopeKey,
-            activeEntityId: clickedEntityId,
-            graphByEntityId:
-              previous.scopeKey === scopeKey ? previous.graphByEntityId : {}
-          }))
+          const needsExpand = shouldExpandNode(expandedState, scopeKey, clickedEntityId)
+          setExpandedState((previous) =>
+            applyNodeClickToExpandedState(previous, scopeKey, clickedEntityId)
+          )
 
-          if (!scopedGraphByEntityId[clickedEntityId]) {
+          if (needsExpand) {
             expandMutation.mutate(clickedEntityId)
           }
         }}

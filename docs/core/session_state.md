@@ -13,34 +13,33 @@ Do NOT add sections. Do NOT write long prose.
 
 ## Current Objective
 (1–2 sentences max)
-- Close remaining runtime verification gate in `docs/build_plan_checklist.md` and finish final phase-gate checkoff.
-- Keep API/docs/contracts aligned with no undocumented endpoints.
+- Restore alignment between implementation and canonical docs/contracts.
+- Add missing unit-test coverage for graph interaction/family autoshape logic.
 
 ---
 
 ## Completed This Session
 (max 5 bullets)
-- Removed undocumented API route `GET /api/v1/graphs/:graphId/relationship-types`.
-- Replaced relationship-type fetching in `GraphWorkspace` with local presets to preserve edge/link edit UX without undocumented endpoint reliance.
-- Updated `docs/api_spec.md` to document implemented `GET` and `DELETE /graphs/:graphId/entities/:id` endpoints.
-- Documented v1 edge `+` policy in `docs/editing_flows.md` (edge interaction is edit-only; creation is node `+` only).
-- Updated `docs/build_plan_checklist.md` and closed Phase 9/10 checks; Phase 11 now only blocked on local runtime verification.
+- Updated `docs/graph_projection_contract.md` as the single canonical contract and documented `view_mode` (`graph | family`) semantics.
+- Confirmed and documented `entity_kind: "family"` in canonical DTO docs as virtual/non-persisted.
+- Extracted graph explorer expansion-state logic to `lib/graph/explorerState.ts` for deterministic unit testing.
+- Extracted autoshape level logic to `lib/graph/layoutLevels.ts` and wired `GraphCanvas` to use it.
+- Added unit tests for explorer state transitions and family-level layout behavior.
 
 ---
 
 ## In Progress / Open
 (max 5 bullets)
-- `docs/build_plan_checklist.md`: `Project runs locally` remains unchecked.
-- `docs/build_plan_checklist.md`: `All phase gates checked` remains unchecked pending local runtime verification.
-- Runtime verification commands requiring port/process binding (`pnpm dev`, `pnpm build`) were blocked in sandbox; escalation request was declined.
+- Run validation (`pnpm test:run`, `pnpm typecheck`) after newly added tests/helpers.
+- Confirm no regressions in graph projection request tests and family projection tests.
 
 ---
 
 ## Next Concrete Steps
 (ordered, actionable, max 5)
-1. Run `pnpm dev` outside sandbox and confirm the app boots locally.
-2. Run `pnpm build` outside sandbox and confirm production build succeeds.
-3. If both pass, check `Project runs locally` and `All phase gates checked` in `docs/build_plan_checklist.md`.
+1. Run `pnpm test:run` and fix any failing tests.
+2. Run `pnpm typecheck` and resolve any type errors.
+3. If both pass, commit alignment updates (docs + helper extractions + tests).
 
 ---
 
@@ -50,23 +49,24 @@ Branch:
 - `feature/ai-spec-integration`
 
 Modified Files:
-- `app/api/v1/graphs/[graphId]/relationship-types/route.ts` (deleted)
-- `components/graph/GraphWorkspace.tsx`
-- `docs/api_spec.md`
-- `docs/build_plan_checklist.md`
-- `tsconfig.json`
-- `lib/api/graphs.ts`
+- `components/graph/GraphExplorer.tsx`
+- `components/graph/GraphCanvas.tsx`
+- `docs/graph_projection_contract.md`
+- `docs/canonical_dtos.md`
+- `lib/graph/explorerState.ts` (new)
+- `lib/graph/layoutLevels.ts` (new)
+- `tests/unit/explorerState.test.ts` (new)
+- `tests/unit/layoutLevels.test.ts` (new)
 - `docs/core/session_state.md`
-- `docs/editing_flows.md`
 
 Uncommitted Changes:
 - Present in the files listed above; no commit created in this session.
 
 Notes:
 (max 3 bullets, only critical info)
-- Latest `pnpm lint` and `pnpm typecheck` pass after route removal and typegen refresh.
-- `pnpm dev` and `pnpm build` could not be completed in this environment due denied escalation for port/process permissions.
-- `docs/build_plan_checklist.md` has 3 remaining unchecked items.
+- Contract decision: keep one canonical projection contract (no split docs per view mode).
+- UI scaffold raw-container rule is treated as advisory for canvas-heavy components.
+- Test additions target pure logic because current Vitest config runs in `node` environment.
 
 ---
 

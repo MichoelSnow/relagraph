@@ -35,6 +35,10 @@ type Entity = {
 }
 ```
 
+Notes:
+- `entity_kind: "family"` is a virtual node kind used by family graph projection mode.
+- Family entities are not persisted in the database.
+
 ---
 
 ### Edge (Resolved Relationship)
