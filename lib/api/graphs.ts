@@ -64,7 +64,7 @@ export async function fetchGraphEntities(graphId: string): Promise<Entity[]> {
 
 export async function createGraphEntity(
   graphId: string,
-  input: { entity_kind: "person" | "animal" | "place"; display_name: string }
+  input: { entity_kind: "person" | "animal" | "place" | "family"; display_name: string }
 ): Promise<Entity> {
   const response = await fetch(`/api/v1/graphs/${graphId}/entities`, {
     method: "POST",
@@ -108,7 +108,7 @@ type CreateRelationshipIntervalResponse = {
 }
 
 type UpdateEntityInput = {
-  entity_kind?: "person" | "animal" | "place"
+  entity_kind?: "person" | "animal" | "place" | "family"
   display_name?: string
   entity_name?: {
     name_text?: string

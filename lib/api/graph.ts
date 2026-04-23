@@ -14,6 +14,7 @@ type AlreadyLoaded = {
 type GraphViewRequest = {
   graph_id: string
   center_entity_id: string
+  view_mode: "graph" | "family"
   as_of: string
   depth: number
   filters: GraphFilters
@@ -23,6 +24,7 @@ type GraphViewRequest = {
 type GraphExpandRequest = {
   graph_id: string
   entity_id: string
+  view_mode?: "graph" | "family"
   as_of: string
   depth: number
   filters: GraphFilters

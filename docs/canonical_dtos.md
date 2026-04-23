@@ -30,7 +30,7 @@ Rule:
 ```ts
 type Entity = {
   id: string
-  entity_kind: "person" | "animal" | "place"
+  entity_kind: "person" | "animal" | "place" | "family"
   display_name: string
 }
 ```
