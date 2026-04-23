@@ -1,7 +1,7 @@
 "use client"
 
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import { fetchGraphExpand, fetchGraphView } from "@/lib/api/graph"
 import { EMPTY_GRAPH_STATE, toGraphState, type GraphState } from "@/lib/api/graphState"
@@ -54,11 +54,7 @@ export default function GraphExplorer({
   onEdgeSelect,
   onAddLinkedNodeFrom
 }: GraphExplorerProps) {
-  const [activeCenterEntityId, setActiveCenterEntityId] = useState(entityId)
-
-  useEffect(() => {
-    setActiveCenterEntityId(entityId)
-  }, [entityId])
+  const activeCenterEntityId = entityId
 
   const [expandedState, setExpandedState] = useState<{
     scopeKey: string
