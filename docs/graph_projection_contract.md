@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document defines the **Graph Projection API contract** for Relagraph.
+This document defines the **canonical Graph Projection API contract** for Relagraph.
 
 This contract specifies how the backend returns a **UI-ready, time-resolved subgraph** for the frontend graph explorer.
 
@@ -34,10 +34,11 @@ POST /api/v1/graphs/:graphId/graph/view
 
 {
   "center_entity_id": "uuid",
+  "view_mode": "graph | family",
   "as_of": "2024-06-01T00:00:00Z",
   "depth": 1,
   "filters": {
-    "entity_types": ["person", "animal", "place"],
+    "entity_types": ["person", "animal", "place", "family"],
     "relationship_types": ["romantic", "familial"],
     "include_inactive": false
   },
@@ -47,6 +48,8 @@ POST /api/v1/graphs/:graphId/graph/view
   }
 }
 ```
+
+`view_mode` defaults to `"graph"` when omitted.
 
 ---
 
@@ -131,6 +134,33 @@ This enables efficient incremental graph expansion.
 
 ---
 
+### View Modes
+
+#### `view_mode = "graph"`
+
+- Returns the base projected graph from traversal
+- Preserves existing edge semantics
+
+#### `view_mode = "family"`
+
+- Builds base graph first (same traversal/filtering/time rules)
+- Identifies parent-child relationships
+- Derives virtual family nodes keyed by unique parent sets
+- Replaces parent-child edges with:
+  - `parent -> family`
+  - `family -> child`
+- Removes from response:
+  - original `parent_child` edges
+  - `sibling` edges
+- Keeps non-family relationship types (example: `romantic`)
+- Family nodes are virtual API artifacts and are not persisted
+
+Family node IDs are deterministic and derived as:
+
+- `family:<sorted_parent_ids_hash>`
+
+---
+
 ### Deduplication
 
 - Each entity appears only once per response
@@ -169,10 +199,14 @@ Backend may enforce limits on:
 ```json
 {
   "id": "uuid",
-  "entity_kind": "person | animal | place",
+  "entity_kind": "person | animal | place | family",
   "display_name": "string"
 }
 ```
+
+Notes:
+- `entity_kind = "family"` is virtual and appears in `view_mode = "family"` responses.
+- Family entities are returned with `display_name` and follow the same `Entity` shape.
 
 ---
 

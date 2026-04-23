@@ -68,6 +68,7 @@ type PlaceProfileInput = {
 }
 
 type EntityNameRecord = GraphEntityDetail["entity_names"][number]
+type EntityKind = GraphEntityDetail["entity_kind"]
 type RelationshipTypePreset = {
   code: string
   display_name: string
@@ -274,13 +275,13 @@ function PanelShell({ title, side, expanded, onToggle, children }: PanelShellPro
 }
 
 export default function GraphWorkspace({ graphId, graphName, initialAsOf }: GraphWorkspaceProps) {
-  const [focusOverride, setFocusOverride] = useState<string | null>(null)
   const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null)
   const [graphRefreshKey, setGraphRefreshKey] = useState(0)
   const [asOf, setAsOf] = useState(initialAsOf)
   const [graphDepth, setGraphDepth] = useState(3)
+  const [viewMode, setViewMode] = useState<"graph" | "family">("graph")
   const [showNodeLabels, setShowNodeLabels] = useState(true)
   const [showRelationshipLabels, setShowRelationshipLabels] = useState(false)
   const [layoutMode, setLayoutMode] = useState<"auto" | "manual">("auto")
@@ -289,7 +290,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   const [rightExpanded, setRightExpanded] = useStoredBoolean(RIGHT_PANEL_KEY, true)
   const [isNodeDetailLoading, setIsNodeDetailLoading] = useState(false)
 
-  const [nodeKind, setNodeKind] = useState<"person" | "animal" | "place">("person")
+  const [nodeKind, setNodeKind] = useState<EntityKind>("person")
   const [entityNameText, setEntityNameText] = useState("")
   const [entityNameType, setEntityNameType] = useState<(typeof NAME_TYPE_OPTIONS)[number]>("legal")
   const [entityNameLanguage, setEntityNameLanguage] = useState("")
@@ -332,6 +333,8 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
 
   const [createMode, setCreateMode] = useState<CreateMode>("new_node")
   const [sourceNodeId, setSourceNodeId] = useState<string | null>(null)
+  const [fixedSourceNodeId, setFixedSourceNodeId] = useState<string | null>(null)
+  const [allowedSourceNodeIds, setAllowedSourceNodeIds] = useState<string[] | null>(null)
   const [newLinkedName, setNewLinkedName] = useState("")
   const [newLinkedKind, setNewLinkedKind] = useState<"person" | "animal" | "place">("person")
   const [existingTargetId, setExistingTargetId] = useState<string | null>(null)
@@ -399,15 +402,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
     return createLinkTargetRoleOptions[0] ?? ""
   }, [newLinkToRole, createLinkTargetRoleOptions])
 
-  const focusEntityId = useMemo(() => {
-    if (focusOverride && entities.some((entity) => entity.id === focusOverride)) {
-      return focusOverride
-    }
-    if (selectedNodeId && entities.some((entity) => entity.id === selectedNodeId)) {
-      return selectedNodeId
-    }
-    return entities[0]?.id ?? null
-  }, [entities, focusOverride, selectedNodeId])
+  const centerEntityId = useMemo(() => entities[0]?.id ?? null, [entities])
 
   const selectedNode = useMemo(
     () => entities.find((entity) => entity.id === selectedNodeId) ?? null,
@@ -427,11 +422,20 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   }, [entities, selectedEdge])
 
   const sourceEntityId = useMemo(() => {
+    if (fixedSourceNodeId && entities.some((entity) => entity.id === fixedSourceNodeId)) {
+      return fixedSourceNodeId
+    }
+    if (allowedSourceNodeIds && allowedSourceNodeIds.length > 0) {
+      if (sourceNodeId && allowedSourceNodeIds.includes(sourceNodeId)) {
+        return sourceNodeId
+      }
+      return allowedSourceNodeIds[0]
+    }
     if (sourceNodeId && entities.some((entity) => entity.id === sourceNodeId)) {
       return sourceNodeId
     }
-    return selectedNodeId ?? focusEntityId ?? ""
-  }, [entities, focusEntityId, selectedNodeId, sourceNodeId])
+    return selectedNodeId ?? centerEntityId ?? ""
+  }, [allowedSourceNodeIds, centerEntityId, entities, fixedSourceNodeId, selectedNodeId, sourceNodeId])
 
   const targetEntityId = useMemo(() => {
     if (existingTargetId && entities.some((entity) => entity.id === existingTargetId)) {
@@ -453,7 +457,13 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
           ? personProfile
           : nodeKind === "animal"
             ? animalProfile
-            : placeProfile
+            : nodeKind === "place"
+              ? {
+                  ...placeProfile,
+                  lat: placeProfile.lat.trim() ? Number(placeProfile.lat) : null,
+                  lng: placeProfile.lng.trim() ? Number(placeProfile.lng) : null
+                }
+              : null
       await updateGraphEntity(graphId, selectedNode.id, {
         entity_kind: nodeKind,
         entity_name: {
@@ -464,15 +474,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
           start_date: entityNameStartDate || null,
           end_date: entityNameEndDate || null
         },
-        profile: {
-          ...profilePayload,
-          ...(nodeKind === "place"
-            ? {
-                lat: placeProfile.lat.trim() ? Number(placeProfile.lat) : null,
-                lng: placeProfile.lng.trim() ? Number(placeProfile.lng) : null
-              }
-            : {})
-        }
+        ...(profilePayload ? { profile: profilePayload } : {})
       })
     },
     onSuccess: () => {
@@ -593,6 +595,8 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
         setSelectedNodeId(sourceEntityId)
       }
       setSelectedEdge(null)
+      setFixedSourceNodeId(null)
+      setAllowedSourceNodeIds(null)
       setNewLinkedName("")
       setNewLinkType("")
       setNewLinkFromRole("")
@@ -615,6 +619,44 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   function onCreateLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     createLinkMutation.mutate()
+  }
+
+  function openLinkEditorFromSource(options: { fixedSourceId?: string; allowedSourceIds?: string[] }) {
+    const allowedIds =
+      options.allowedSourceIds && options.allowedSourceIds.length > 0
+        ? options.allowedSourceIds
+        : null
+
+    if (options.fixedSourceId) {
+      setFixedSourceNodeId(options.fixedSourceId)
+      setAllowedSourceNodeIds(null)
+      setSourceNodeId(options.fixedSourceId)
+      setSelectedNodeId(options.fixedSourceId)
+    } else if (allowedIds) {
+      setFixedSourceNodeId(null)
+      setAllowedSourceNodeIds(allowedIds)
+      setSourceNodeId(allowedIds[0])
+      setSelectedNodeId(allowedIds[0] ?? null)
+    } else {
+      setFixedSourceNodeId(null)
+      setAllowedSourceNodeIds(null)
+    }
+
+    setSelectedEdge(null)
+    setCreateMode("new_node")
+    setNewLinkStart("")
+    if (relationshipTypes.length > 0) {
+      const defaultType = relationshipTypes[0]
+      setNewLinkType(defaultType.code)
+      if (defaultType.source_roles.length > 0) {
+        setNewLinkFromRole(defaultType.source_roles[0])
+      }
+      if (defaultType.target_roles.length > 0) {
+        setNewLinkToRole(defaultType.target_roles[0])
+      }
+    }
+    setRightPanelMode("link")
+    setRightExpanded(true)
   }
 
   function onCreateLinkTypeChange(nextType: string) {
@@ -804,31 +846,6 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   const controlsPanel = (
     <Section className="mb-0">
       <Stack className="gap-3">
-        <label className="block">
-          <FieldLabel>Focus</FieldLabel>
-          <Select
-            value={focusEntityId ?? ""}
-            onChange={(event) => {
-              const nextId = event.target.value || null
-              setFocusOverride(nextId)
-              setSelectedNodeId(nextId)
-              setSelectedEdge(null)
-              setRightPanelMode(nextId ? "node" : null)
-              if (nextId) {
-                void loadNodeDetailIntoEditor(nextId)
-              }
-            }}
-            disabled={entities.length === 0}
-          >
-            {entities.length === 0 ? <option value="">-</option> : null}
-            {entities.map((entity) => (
-              <option key={entity.id} value={entity.id}>
-                {entity.display_name}
-              </option>
-            ))}
-          </Select>
-        </label>
-
         {!TEMPORAL_SIMPLE_MODE ? <TimeSlider asOf={asOf} onChange={setAsOf} /> : null}
 
         <label className="block">
@@ -838,6 +855,22 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
             <option value="2">2</option>
             <option value="3">3</option>
             <option value="4">4</option>
+          </Select>
+        </label>
+
+        <label className="block">
+          <FieldLabel>View mode</FieldLabel>
+          <Select
+            value={viewMode}
+            onChange={(event) => {
+              const nextViewMode = event.target.value as "graph" | "family"
+              setViewMode(nextViewMode)
+              setSelectedEdge(null)
+              setRightPanelMode(null)
+            }}
+          >
+            <option value="graph">Graph view</option>
+            <option value="family">Family view</option>
           </Select>
         </label>
 
@@ -877,10 +910,11 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
               <Stack className="gap-3">
                 <label className="block">
                   <FieldLabel compact>Node type</FieldLabel>
-                  <Select value={nodeKind} onChange={(event) => setNodeKind(event.target.value as "person" | "animal" | "place")}>
+                  <Select value={nodeKind} onChange={(event) => setNodeKind(event.target.value as EntityKind)}>
                     <option value="person">person</option>
                     <option value="animal">animal</option>
                     <option value="place">place</option>
+                    <option value="family">family</option>
                   </Select>
                 </label>
 
@@ -1122,14 +1156,23 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
                 </label>
                 <label className="block">
                   <FieldLabel compact>Source node</FieldLabel>
-                  <Select value={sourceEntityId} onChange={(event) => setSourceNodeId(event.target.value || null)} required>
-                    <option value=""></option>
-                    {entities.map((entity) => (
-                      <option key={entity.id} value={entity.id}>
-                        {entity.display_name}
-                      </option>
-                    ))}
-                  </Select>
+                  {fixedSourceNodeId ? (
+                    <Input
+                      value={entities.find((entity) => entity.id === sourceEntityId)?.display_name ?? sourceEntityId}
+                      readOnly
+                    />
+                  ) : (
+                    <Select value={sourceEntityId} onChange={(event) => setSourceNodeId(event.target.value || null)} required>
+                      <option value=""></option>
+                      {entities
+                        .filter((entity) => !allowedSourceNodeIds || allowedSourceNodeIds.includes(entity.id))
+                        .map((entity) => (
+                          <option key={entity.id} value={entity.id}>
+                            {entity.display_name}
+                          </option>
+                        ))}
+                    </Select>
+                  )}
                 </label>
 
                 {createMode === "new_node" ? (
@@ -1222,10 +1265,11 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
     </Stack>
   )
 
-  const canvas = focusEntityId ? (
+  const canvas = centerEntityId ? (
     <GraphExplorer
       graphId={graphId}
-      entityId={focusEntityId}
+      entityId={centerEntityId}
+      viewMode={viewMode}
       asOf={asOf}
       includeInactive={includeInactive}
       depth={graphDepth}
@@ -1237,17 +1281,22 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
       onNodeSelect={(nodeId) => {
         setSelectedNodeId(nodeId)
         setSelectedEdge(null)
+        if (nodeId.startsWith("family:")) {
+          setRightPanelMode(null)
+          return
+        }
         setRightPanelMode("node")
         void loadNodeDetailIntoEditor(nodeId)
       }}
       onEdgeSelect={(edge) => {
+        if (viewMode === "family") {
+          setSelectedEdge(null)
+          setRightPanelMode(null)
+          return
+        }
         setSelectedEdge(edge)
         setSelectedNodeId(null)
         if (edge) {
-          const connectedFocusId = entities.some((entity) => entity.id === edge.from_entity_id)
-            ? edge.from_entity_id
-            : edge.to_entity_id
-          setFocusOverride(connectedFocusId)
           setEdgeType(edge.relationship_type)
           setEdgeFromRole(edge.roles.from)
           setEdgeToRole(edge.roles.to)
@@ -1258,24 +1307,24 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
           setRightPanelMode(null)
         }
       }}
-      onAddLinkedNodeFrom={(nodeId) => {
-        setSourceNodeId(nodeId)
-        setSelectedNodeId(nodeId)
-        setSelectedEdge(null)
-        setCreateMode("new_node")
-        setNewLinkStart("")
-        if (relationshipTypes.length > 0) {
-          const defaultType = relationshipTypes[0]
-          setNewLinkType(defaultType.code)
-          if (defaultType.source_roles.length > 0) {
-            setNewLinkFromRole(defaultType.source_roles[0])
-          }
-          if (defaultType.target_roles.length > 0) {
-            setNewLinkToRole(defaultType.target_roles[0])
-          }
+      onAddLinkedNodeFrom={(payload) => {
+        if (payload.entityKind === "family") {
+          const familyMemberIds = entities
+            .filter((entity) =>
+              (payload.familyParentIds ?? []).includes(entity.id) ||
+              (payload.familyChildIds ?? []).includes(entity.id)
+            )
+            .map((entity) => entity.id)
+
+          openLinkEditorFromSource({
+            allowedSourceIds: familyMemberIds
+          })
+          return
         }
-        setRightPanelMode("link")
-        setRightExpanded(true)
+
+        openLinkEditorFromSource({
+          fixedSourceId: payload.entityId
+        })
       }}
     />
   ) : (

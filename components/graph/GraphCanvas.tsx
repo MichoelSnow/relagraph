@@ -4,6 +4,7 @@ import cytoscape, { type ElementDefinition } from "cytoscape"
 import { useEffect, useMemo, useRef } from "react"
 
 import type { Edge, Entity } from "@/types"
+import { computeNodeLevels } from "@/lib/graph/layoutLevels"
 import { normalizeRelationshipTypeCode } from "@/lib/graph/relationshipType"
 import { graphTheme, resolveGraphTheme, type ResolvedGraphTheme } from "@/lib/ui/graphTheme"
 
@@ -16,7 +17,7 @@ type GraphCanvasProps = {
   showRelationshipLabels?: boolean
   onNodeClick: (entityId: string) => void
   onEdgeClick?: (relationshipId: string) => void
-  onAddLinkedNodeFrom?: (entityId: string) => void
+  onAddLinkedNodeFrom?: (node: { entityId: string; entityKind: Entity["entity_kind"] }) => void
 }
 
 function colorForRelationshipType(value: string): string {
@@ -33,97 +34,13 @@ function colorForRelationshipType(value: string): string {
   if (normalized === "sibling") {
     return "#f59e0b"
   }
-  return "var(--graph-edge-line)"
-}
-
-function normalizeRole(value: string): string {
-  return value.trim().toLowerCase()
-}
-
-function resolveHierarchyConstraint(edge: Edge): { higherEntityId: string; lowerEntityId: string } | null {
-  const fromRole = normalizeRole(edge.roles.from)
-  const toRole = normalizeRole(edge.roles.to)
-  const higherPairs: Array<[string, string]> = [
-    ["parent", "child"],
-    ["owner", "pet"],
-    ["owner", "animal"],
-    ["friend", "animal"],
-    ["friend", "pet"]
-  ]
-
-  for (const [higherRole, lowerRole] of higherPairs) {
-    if (fromRole === higherRole && toRole === lowerRole) {
-      return { higherEntityId: edge.from_entity_id, lowerEntityId: edge.to_entity_id }
-    }
-    if (toRole === higherRole && fromRole === lowerRole) {
-      return { higherEntityId: edge.to_entity_id, lowerEntityId: edge.from_entity_id }
-    }
+  if (normalized === "family_parent") {
+    return "#334155"
   }
-
-  return null
-}
-
-function isSameLevelRelationship(edge: Edge): boolean {
-  const relationshipType = normalizeRelationshipTypeCode(edge.relationship_type)
-  if (relationshipType === "sibling" || relationshipType === "romantic") {
-    return true
+  if (normalized === "family_child") {
+    return "#475569"
   }
-
-  const fromRole = normalizeRole(edge.roles.from)
-  const toRole = normalizeRole(edge.roles.to)
-  if (fromRole === "sibling" && toRole === "sibling") {
-    return true
-  }
-  if (fromRole === "spouse" && toRole === "spouse") {
-    return true
-  }
-
-  return false
-}
-
-function computeNodeLevels(entities: Entity[], edges: Edge[]): Map<string, number> {
-  const levels = new Map<string, number>()
-  for (const entity of entities) {
-    levels.set(entity.id, 0)
-  }
-
-  const constraints = edges
-    .map(resolveHierarchyConstraint)
-    .filter((constraint): constraint is { higherEntityId: string; lowerEntityId: string } => constraint !== null)
-  const sameLevelPairs = edges
-    .filter((edge) => isSameLevelRelationship(edge))
-    .map((edge) => [edge.from_entity_id, edge.to_entity_id] as const)
-
-  for (let iteration = 0; iteration < entities.length * 2; iteration += 1) {
-    let changed = false
-    for (const constraint of constraints) {
-      const higher = levels.get(constraint.higherEntityId) ?? 0
-      const lower = levels.get(constraint.lowerEntityId) ?? 0
-      const nextLower = Math.max(lower, higher + 1)
-      if (nextLower !== lower) {
-        levels.set(constraint.lowerEntityId, nextLower)
-        changed = true
-      }
-    }
-    for (const [leftId, rightId] of sameLevelPairs) {
-      const left = levels.get(leftId) ?? 0
-      const right = levels.get(rightId) ?? 0
-      const nextLevel = Math.max(left, right)
-      if (nextLevel !== left) {
-        levels.set(leftId, nextLevel)
-        changed = true
-      }
-      if (nextLevel !== right) {
-        levels.set(rightId, nextLevel)
-        changed = true
-      }
-    }
-    if (!changed) {
-      break
-    }
-  }
-
-  return levels
+  return "#64748b"
 }
 
 function runAutoLevelLayout(cy: cytoscape.Core, entities: Entity[], edges: Edge[]) {
@@ -151,25 +68,29 @@ function runAutoLevelLayout(cy: cytoscape.Core, entities: Entity[], edges: Edge[
   const verticalSpacing = 180
   const horizontalSpacing = 180
 
-  cy.batch(() => {
-    for (const level of levelOrder) {
-      const ids = idsByLevel.get(level) ?? []
-      const centerOffset = (ids.length - 1) / 2
-      for (let index = 0; index < ids.length; index += 1) {
-        const id = ids[index]
-        const node = cy.getElementById(id)
-        if (node.length === 0) {
-          continue
-        }
-        node.position({
-          x: (index - centerOffset) * horizontalSpacing,
-          y: level * verticalSpacing
-        })
+  for (const level of levelOrder) {
+    const ids = idsByLevel.get(level) ?? []
+    const centerOffset = (ids.length - 1) / 2
+    for (let index = 0; index < ids.length; index += 1) {
+      const id = ids[index]
+      const node = cy.getElementById(id)
+      if (node.length === 0) {
+        continue
       }
+      node.animate(
+        {
+          position: {
+            x: (index - centerOffset) * horizontalSpacing,
+            y: level * verticalSpacing
+          }
+        },
+        {
+          duration: 220,
+          easing: "ease-in-out"
+        }
+      )
     }
-  })
-
-  cy.fit(undefined, 48)
+  }
 }
 
 function buildCanvasStyles(
@@ -194,6 +115,15 @@ function buildCanvasStyles(
       selector: "node[entityKind = 'place']",
       style: {
         "background-color": resolvedTheme.node.place
+      }
+    },
+    {
+      selector: "node[entityKind = 'family']",
+      style: {
+        "background-color": "#64748b",
+        shape: "round-rectangle",
+        width: 44,
+        height: 28
       }
     },
     {
@@ -231,9 +161,15 @@ function buildCanvasStyles(
         "text-background-color": resolvedTheme.edge.textBg,
         "text-background-opacity": 1,
         "text-background-padding": "2px",
-        "line-color": "data(lineColor)",
+        "line-color": resolvedTheme.edge.line,
         "target-arrow-shape": "none",
         "curve-style": "bezier"
+      }
+    },
+    {
+      selector: "edge[line_color]",
+      style: {
+        "line-color": "data(line_color)"
       }
     },
     {
@@ -244,6 +180,15 @@ function buildCanvasStyles(
       }
     }
   ]
+}
+
+function resolveNodeLabel(entity: Entity): string {
+  if (entity.entity_kind === "family") {
+    const label = entity.display_name.trim()
+    return label.length > 0 ? label : "Family"
+  }
+
+  return entity.display_name
 }
 
 export default function GraphCanvas({
@@ -258,6 +203,7 @@ export default function GraphCanvas({
   onAddLinkedNodeFrom
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const canvasShellRef = useRef<HTMLDivElement | null>(null)
   const cyRef = useRef<cytoscape.Core | null>(null)
   const floatingLayerRef = useRef<HTMLDivElement | null>(null)
   const previousTopologyKeyRef = useRef("")
@@ -284,7 +230,7 @@ export default function GraphCanvas({
     const nodeElements: ElementDefinition[] = entities.map((entity) => ({
       data: {
         id: entity.id,
-        label: entity.display_name,
+        label: resolveNodeLabel(entity),
         entityKind: entity.entity_kind,
         isSelected: entity.id === selectedEntityId ? "true" : "false"
       }
@@ -297,7 +243,7 @@ export default function GraphCanvas({
         target: edge.to_entity_id,
         relationshipType: edge.relationship_type,
         relationshipGroup: normalizeRelationshipTypeCode(edge.relationship_type),
-        lineColor: colorForRelationshipType(edge.relationship_type),
+        line_color: colorForRelationshipType(edge.relationship_type),
         active: edge.active ? "true" : "false"
       }
     }))
@@ -333,56 +279,105 @@ export default function GraphCanvas({
     })
     cyRef.current = cy
 
+    const shell = canvasShellRef.current ?? containerRef.current
+    if (!shell) {
+      cy.destroy()
+      cyRef.current = null
+      return
+    }
+
     const floatingLayer = document.createElement("div")
-    floatingLayer.style.position = "fixed"
+    floatingLayer.style.position = "absolute"
     floatingLayer.style.left = "0"
     floatingLayer.style.top = "0"
-    floatingLayer.style.width = "100vw"
-    floatingLayer.style.height = "100vh"
+    floatingLayer.style.width = "100%"
+    floatingLayer.style.height = "100%"
     floatingLayer.style.pointerEvents = "none"
-    floatingLayer.style.zIndex = "9999"
-    document.body.appendChild(floatingLayer)
+    floatingLayer.style.zIndex = "2"
+    shell.appendChild(floatingLayer)
     floatingLayerRef.current = floatingLayer
 
     const renderNodeAddButtons = () => {
       const currentCy = cyRef.current
       const currentLayer = floatingLayerRef.current
-      const containerRect = containerRef.current?.getBoundingClientRect()
-      if (!currentCy || !currentLayer || !containerRect) {
+      const containerElement = containerRef.current
+      if (!currentCy || !currentLayer || !containerElement) {
         return
       }
 
+      const containerWidth = containerElement.clientWidth
+      const containerHeight = containerElement.clientHeight
       currentLayer.innerHTML = ""
       for (const node of currentCy.nodes()) {
         const button = document.createElement("button")
         button.type = "button"
-        button.className = "fixed inline-flex items-center justify-center rounded-full font-semibold"
+        button.className = "absolute inline-flex items-center justify-center rounded-full font-semibold"
         button.textContent = "+"
         button.setAttribute("aria-label", "Add linked node")
 
         const position = node.renderedPosition()
-        const renderedX = containerRect.left + position.x
-        const renderedY = containerRect.top + position.y
+        const renderedX = position.x
+        const renderedY = position.y
         if (!Number.isFinite(renderedX) || !Number.isFinite(renderedY)) {
           continue
         }
+        if (
+          renderedX < -64 ||
+          renderedY < -64 ||
+          renderedX > containerWidth + 64 ||
+          renderedY > containerHeight + 64
+        ) {
+          continue
+        }
 
-        button.style.left = `${renderedX + 18}px`
-        button.style.top = `${renderedY - 18}px`
+        const renderedNodeSize = Math.max(node.renderedWidth(), node.renderedHeight())
+        const buttonSize = Math.max(14, Math.min(30, renderedNodeSize * 0.9))
+        const offset = renderedNodeSize * 0.55
+
+        button.style.left = `${renderedX + offset}px`
+        button.style.top = `${renderedY - offset}px`
         button.style.transform = "translate(-50%, -50%)"
-        button.style.height = "24px"
-        button.style.width = "24px"
+        button.style.height = `${buttonSize}px`
+        button.style.width = `${buttonSize}px`
         button.style.background = "#22c55e"
         button.style.color = "#0b1020"
         button.style.border = "2px solid #0b1020"
         button.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.35)"
-        button.style.fontSize = "16px"
+        button.style.fontSize = `${Math.max(10, Math.min(18, buttonSize * 0.65))}px`
         button.style.lineHeight = "1"
         button.style.pointerEvents = "auto"
+        button.onwheel = (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+
+          const container = containerRef.current
+          if (!container) {
+            return
+          }
+
+          const forwardedEvent = new WheelEvent("wheel", {
+            bubbles: true,
+            cancelable: true,
+            deltaMode: event.deltaMode,
+            deltaX: event.deltaX,
+            deltaY: event.deltaY,
+            deltaZ: event.deltaZ,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            ctrlKey: event.ctrlKey,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey,
+            metaKey: event.metaKey
+          })
+          container.dispatchEvent(forwardedEvent)
+        }
         button.onclick = (event) => {
           event.preventDefault()
           event.stopPropagation()
-          onAddLinkedNodeFromRef.current?.(node.id())
+          onAddLinkedNodeFromRef.current?.({
+            entityId: node.id(),
+            entityKind: (node.data("entityKind") as Entity["entity_kind"]) ?? "person"
+          })
         }
         currentLayer.appendChild(button)
       }
@@ -408,7 +403,6 @@ export default function GraphCanvas({
     cy.on("tap", "edge", handleEdgeTap)
     cy.on("render zoom pan resize layoutstop", renderNodeAddButtons)
     window.addEventListener("resize", renderNodeAddButtons)
-    window.addEventListener("scroll", renderNodeAddButtons, true)
     renderNodeAddButtons()
     requestAnimationFrame(renderNodeAddButtons)
 
@@ -417,7 +411,6 @@ export default function GraphCanvas({
       cy.off("tap", "edge", handleEdgeTap)
       cy.off("render zoom pan resize layoutstop", renderNodeAddButtons)
       window.removeEventListener("resize", renderNodeAddButtons)
-      window.removeEventListener("scroll", renderNodeAddButtons, true)
       cy.stop()
       cy.destroy()
       cyRef.current = null
@@ -538,7 +531,7 @@ export default function GraphCanvas({
   }, [elements, topologyKey, entities, edges, layoutMode])
 
   return (
-    <div className="relative h-[68vh] min-h-[520px] w-full rounded-xl border border-[var(--graph-canvas-border)]">
+    <div ref={canvasShellRef} className="relative h-[68vh] min-h-[520px] w-full overflow-hidden rounded-xl border border-[var(--graph-canvas-border)]">
       <div
         ref={containerRef}
         className="h-full w-full rounded-xl"

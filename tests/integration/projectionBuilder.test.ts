@@ -166,4 +166,5 @@ describe("buildGraphDeltaFromCenter", () => {
       meta: { truncated: false, node_count: 1, edge_count: 0 }
     })
   })
+
 })

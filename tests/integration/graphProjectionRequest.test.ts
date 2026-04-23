@@ -4,14 +4,17 @@ import { handleGraphProjectionRequest } from "@/server/api/graph_projection"
 import type { GraphResponse } from "@/types"
 
 const buildGraphDeltaFromCenterMock = vi.hoisted(() => vi.fn())
+const toFamilyViewGraphMock = vi.hoisted(() => vi.fn())
 
 vi.mock("@/server/graph/projection", () => ({
-  buildGraphDeltaFromCenter: buildGraphDeltaFromCenterMock
+  buildGraphDeltaFromCenter: buildGraphDeltaFromCenterMock,
+  toFamilyViewGraph: toFamilyViewGraphMock
 }))
 
 describe("handleGraphProjectionRequest", () => {
   beforeEach(() => {
     buildGraphDeltaFromCenterMock.mockReset()
+    toFamilyViewGraphMock.mockReset()
   })
 
   it("should_return_415_when_content_type_is_not_json", async () => {
@@ -196,7 +199,84 @@ describe("handleGraphProjectionRequest", () => {
       allowedRelationshipTypes: new Set(["romantic"]),
       includeInactive: true
     })
+    expect(toFamilyViewGraphMock).not.toHaveBeenCalled()
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual(graphResponse)
+  })
+
+  it("should_transform_response_when_view_mode_is_family", async () => {
+    const baseGraphResponse: GraphResponse = {
+      entities: [{ id: "e1", entity_kind: "person", display_name: "Alex" }],
+      edges: [],
+      meta: { truncated: false, node_count: 1, edge_count: 0 }
+    }
+    const familyGraphResponse: GraphResponse = {
+      entities: [
+        { id: "e1", entity_kind: "person", display_name: "Alex" },
+        { id: "family:abc", entity_kind: "family", display_name: "Family" }
+      ],
+      edges: [],
+      meta: { truncated: false, node_count: 2, edge_count: 0 }
+    }
+
+    buildGraphDeltaFromCenterMock.mockResolvedValueOnce(baseGraphResponse)
+    toFamilyViewGraphMock.mockReturnValueOnce(familyGraphResponse)
+
+    const request = new Request("http://localhost", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        center_entity_id: "e1",
+        view_mode: "family",
+        as_of: "2024-06-01T00:00:00.000Z",
+        depth: 1,
+        already_loaded: {
+          entity_ids: ["e0"],
+          relationship_ids: ["r0"]
+        }
+      })
+    })
+
+    const response = await handleGraphProjectionRequest({
+      request,
+      graphId: "g1",
+      entityField: "center_entity_id",
+      entityMissingMessage: "center_entity_id is required",
+      entityNotFoundMessage: "Center entity does not exist"
+    })
+
+    expect(toFamilyViewGraphMock).toHaveBeenCalledWith(
+      baseGraphResponse,
+      new Set(["e0"]),
+      new Set(["r0"])
+    )
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual(familyGraphResponse)
+  })
+
+  it("should_return_400_when_view_mode_is_invalid", async () => {
+    const request = new Request("http://localhost", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        center_entity_id: "e1",
+        view_mode: "bad",
+        as_of: "2024-06-01T00:00:00.000Z",
+        depth: 1
+      })
+    })
+
+    const response = await handleGraphProjectionRequest({
+      request,
+      graphId: "g1",
+      entityField: "center_entity_id",
+      entityMissingMessage: "center_entity_id is required",
+      entityNotFoundMessage: "Center entity does not exist"
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { message: "view_mode must be one of: graph, family" }
+    })
   })
 })

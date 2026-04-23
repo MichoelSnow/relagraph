@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server"
 
-import { buildGraphDeltaFromCenter } from "@/server/graph/projection"
+import { buildGraphDeltaFromCenter, toFamilyViewGraph } from "@/server/graph/projection"
 import { asStringArray, isIsoTimestamp, isJsonRequest, jsonError } from "@/server/api/http"
+
+type ViewMode = "graph" | "family"
 
 type GraphProjectionRequestBody = {
   center_entity_id?: string
   entity_id?: string
+  view_mode?: ViewMode
   as_of?: string
   depth?: number
   filters?: {
@@ -58,13 +61,21 @@ export async function handleGraphProjectionRequest(
     return jsonError(400, "invalid_request", "depth must be a non-negative integer")
   }
 
+  const viewMode = body.view_mode ?? "graph"
+  if (viewMode !== "graph" && viewMode !== "family") {
+    return jsonError(400, "invalid_request", "view_mode must be one of: graph, family")
+  }
+
+  const alreadyLoadedEntityIds = new Set(asStringArray(body.already_loaded?.entity_ids))
+  const alreadyLoadedRelationshipIds = new Set(asStringArray(body.already_loaded?.relationship_ids))
+
   const graph = await buildGraphDeltaFromCenter({
     graphId,
     centerEntityId,
     asOf: body.as_of,
     depth: body.depth ?? 0,
-    alreadyLoadedEntityIds: new Set(asStringArray(body.already_loaded?.entity_ids)),
-    alreadyLoadedRelationshipIds: new Set(asStringArray(body.already_loaded?.relationship_ids)),
+    alreadyLoadedEntityIds,
+    alreadyLoadedRelationshipIds,
     allowedEntityKinds: body.filters?.entity_types?.length
       ? new Set(asStringArray(body.filters.entity_types))
       : null,
@@ -80,5 +91,10 @@ export async function handleGraphProjectionRequest(
     })
   }
 
-  return NextResponse.json(graph)
+  const responseGraph =
+    viewMode === "family"
+      ? toFamilyViewGraph(graph, alreadyLoadedEntityIds, alreadyLoadedRelationshipIds)
+      : graph
+
+  return NextResponse.json(responseGraph)
 }
