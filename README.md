@@ -83,6 +83,21 @@ pnpm build
 pnpm lint
 ```
 
+## Testing
+
+Install test dependencies and run tests:
+
+```bash
+pnpm install
+pnpm test:run
+```
+
+Coverage:
+
+```bash
+pnpm test:coverage
+```
+
 ## Project Structure
 
 ```text
