@@ -24,7 +24,6 @@ type GraphCanvasProps = {
   showRelationshipLabels?: boolean
   onNodeClick: (entityId: string) => void
   onEdgeClick?: (relationshipId: string) => void
-  onAddLinkedNodeFrom?: (node: { entityId: string; entityKind: Entity["entity_kind"] }) => void
 }
 
 function colorForRelationshipType(value: string): string {
@@ -221,22 +220,18 @@ export default function GraphCanvas({
   showNodeLabels = true,
   showRelationshipLabels = false,
   onNodeClick,
-  onEdgeClick,
-  onAddLinkedNodeFrom
+  onEdgeClick
 }: GraphCanvasProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const canvasShellRef = useRef<HTMLDivElement | null>(null)
   const cyRef = useRef<cytoscape.Core | null>(null)
-  const floatingLayerRef = useRef<HTMLDivElement | null>(null)
   const previousTopologyKeyRef = useRef("")
   const previousLayoutModeRef = useRef<"auto" | "manual">(layoutMode)
   const previousLayoutEngineModeRef = useRef<LayoutEngineMode>(layoutEngineMode)
   const previousLayoutConfigKeyRef = useRef(`${layoutConfig.horizontalSpacing}|${layoutConfig.verticalSpacing}`)
-  const renderNodeAddButtonsRef = useRef<(() => void) | null>(null)
 
   const onNodeClickRef = useRef(onNodeClick)
   const onEdgeClickRef = useRef(onEdgeClick)
-  const onAddLinkedNodeFromRef = useRef(onAddLinkedNodeFrom)
   const resolvedLayout = useMemo(
     () => resolveLayoutWithFallback(layoutEngineMode, { entities, edges }, layoutConfig),
     [layoutEngineMode, entities, edges, layoutConfig]
@@ -254,10 +249,6 @@ export default function GraphCanvas({
   useEffect(() => {
     onEdgeClickRef.current = onEdgeClick
   }, [onEdgeClick])
-
-  useEffect(() => {
-    onAddLinkedNodeFromRef.current = onAddLinkedNodeFrom
-  }, [onAddLinkedNodeFrom])
 
   const elements = useMemo<ElementDefinition[]>(() => {
     const nodeElements: ElementDefinition[] = entities.map((entity) => ({
@@ -327,112 +318,6 @@ export default function GraphCanvas({
     })
     cyRef.current = cy
 
-    const shell = canvasShellRef.current ?? containerRef.current
-    if (!shell) {
-      cy.destroy()
-      cyRef.current = null
-      return
-    }
-
-    const floatingLayer = document.createElement("div")
-    floatingLayer.style.position = "absolute"
-    floatingLayer.style.left = "0"
-    floatingLayer.style.top = "0"
-    floatingLayer.style.width = "100%"
-    floatingLayer.style.height = "100%"
-    floatingLayer.style.pointerEvents = "none"
-    floatingLayer.style.zIndex = "2"
-    shell.appendChild(floatingLayer)
-    floatingLayerRef.current = floatingLayer
-
-    const renderNodeAddButtons = () => {
-      const currentCy = cyRef.current
-      const currentLayer = floatingLayerRef.current
-      const containerElement = containerRef.current
-      if (!currentCy || !currentLayer || !containerElement) {
-        return
-      }
-
-      const containerWidth = containerElement.clientWidth
-      const containerHeight = containerElement.clientHeight
-      currentLayer.innerHTML = ""
-      for (const node of currentCy.nodes()) {
-        const button = document.createElement("button")
-        button.type = "button"
-        button.className = "absolute inline-flex items-center justify-center rounded-full font-semibold"
-        button.textContent = "+"
-        button.setAttribute("aria-label", "Add linked node")
-
-        const position = node.renderedPosition()
-        const renderedX = position.x
-        const renderedY = position.y
-        if (!Number.isFinite(renderedX) || !Number.isFinite(renderedY)) {
-          continue
-        }
-        if (
-          renderedX < -64 ||
-          renderedY < -64 ||
-          renderedX > containerWidth + 64 ||
-          renderedY > containerHeight + 64
-        ) {
-          continue
-        }
-
-        const renderedNodeSize = Math.max(node.renderedWidth(), node.renderedHeight())
-        const buttonSize = Math.max(14, Math.min(30, renderedNodeSize * 0.9))
-        const offset = renderedNodeSize * 0.55
-
-        button.style.left = `${renderedX + offset}px`
-        button.style.top = `${renderedY - offset}px`
-        button.style.transform = "translate(-50%, -50%)"
-        button.style.height = `${buttonSize}px`
-        button.style.width = `${buttonSize}px`
-        button.style.background = "#22c55e"
-        button.style.color = "#0b1020"
-        button.style.border = "2px solid #0b1020"
-        button.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.35)"
-        button.style.fontSize = `${Math.max(10, Math.min(18, buttonSize * 0.65))}px`
-        button.style.lineHeight = "1"
-        button.style.pointerEvents = "auto"
-        button.onwheel = (event) => {
-          event.preventDefault()
-          event.stopPropagation()
-
-          const container = containerRef.current
-          if (!container) {
-            return
-          }
-
-          const forwardedEvent = new WheelEvent("wheel", {
-            bubbles: true,
-            cancelable: true,
-            deltaMode: event.deltaMode,
-            deltaX: event.deltaX,
-            deltaY: event.deltaY,
-            deltaZ: event.deltaZ,
-            clientX: event.clientX,
-            clientY: event.clientY,
-            ctrlKey: event.ctrlKey,
-            shiftKey: event.shiftKey,
-            altKey: event.altKey,
-            metaKey: event.metaKey
-          })
-          container.dispatchEvent(forwardedEvent)
-        }
-        button.onclick = (event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          onAddLinkedNodeFromRef.current?.({
-            entityId: node.id(),
-            entityKind: (node.data("entityKind") as Entity["entity_kind"]) ?? "person"
-          })
-        }
-        currentLayer.appendChild(button)
-      }
-    }
-
-    renderNodeAddButtonsRef.current = renderNodeAddButtons
-
     const handleTap = (event: cytoscape.EventObject) => {
       const id = event.target.id()
       if (id) {
@@ -449,24 +334,14 @@ export default function GraphCanvas({
 
     cy.on("tap", "node", handleTap)
     cy.on("tap", "edge", handleEdgeTap)
-    cy.on("render zoom pan resize layoutstop", renderNodeAddButtons)
-    window.addEventListener("resize", renderNodeAddButtons)
-    renderNodeAddButtons()
-    requestAnimationFrame(renderNodeAddButtons)
 
     return () => {
       cy.off("tap", "node", handleTap)
       cy.off("tap", "edge", handleEdgeTap)
-      cy.off("render zoom pan resize layoutstop", renderNodeAddButtons)
-      window.removeEventListener("resize", renderNodeAddButtons)
       cy.stop()
       cy.destroy()
       cyRef.current = null
       previousTopologyKeyRef.current = ""
-      renderNodeAddButtonsRef.current = null
-
-      floatingLayer.remove()
-      floatingLayerRef.current = null
     }
   }, [])
 
@@ -483,7 +358,6 @@ export default function GraphCanvas({
 
     const resolvedTheme = resolveGraphTheme(themeSource)
     cy.style(buildCanvasStyles(resolvedTheme, showNodeLabels, showRelationshipLabels) as never)
-    renderNodeAddButtonsRef.current?.()
   }, [showNodeLabels, showRelationshipLabels])
 
   useEffect(() => {
@@ -581,8 +455,6 @@ export default function GraphCanvas({
     previousLayoutModeRef.current = layoutMode
     previousLayoutEngineModeRef.current = layoutEngineMode
     previousLayoutConfigKeyRef.current = layoutConfigKey
-
-    renderNodeAddButtonsRef.current?.()
   }, [elements, topologyKey, layoutOutput, layoutMode, layoutEngineMode, layoutConfig])
 
   return (

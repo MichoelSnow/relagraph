@@ -38,7 +38,8 @@ type GraphWorkspaceProps = {
 }
 
 type CreateMode = "new_node" | "existing_node"
-type RightPanelMode = "node" | "edge" | "link" | null
+type EditAction = "edit_node" | "create_linked_node" | "link_existing_node"
+type RightPanelMode = "node" | "edge" | null
 
 type PersonProfileInput = {
   birth_date: string
@@ -337,10 +338,9 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   const [edgeStart, setEdgeStart] = useState("")
   const [edgeEnd, setEdgeEnd] = useState("")
 
-  const [createMode, setCreateMode] = useState<CreateMode>("new_node")
+  const [editAction, setEditAction] = useState<EditAction>("edit_node")
   const [sourceNodeId, setSourceNodeId] = useState<string | null>(null)
-  const [fixedSourceNodeId, setFixedSourceNodeId] = useState<string | null>(null)
-  const [allowedSourceNodeIds, setAllowedSourceNodeIds] = useState<string[] | null>(null)
+  const [familySourceNodeIds, setFamilySourceNodeIds] = useState<string[]>([])
   const [newLinkedName, setNewLinkedName] = useState("")
   const [newLinkedKind, setNewLinkedKind] = useState<"person" | "animal" | "place">("person")
   const [existingTargetId, setExistingTargetId] = useState<string | null>(null)
@@ -407,6 +407,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
     }
     return createLinkTargetRoleOptions[0] ?? ""
   }, [newLinkToRole, createLinkTargetRoleOptions])
+  const createMode: CreateMode = editAction === "link_existing_node" ? "existing_node" : "new_node"
 
   const centerEntityId = useMemo(() => entities[0]?.id ?? null, [entities])
   const layoutConfig = useMemo(
@@ -420,6 +421,11 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   const selectedNode = useMemo(
     () => entities.find((entity) => entity.id === selectedNodeId) ?? null,
     [entities, selectedNodeId]
+  )
+  const isFamilyNodeSelected = selectedNodeId?.startsWith("family:") ?? false
+  const familySourceEntities = useMemo(
+    () => entities.filter((entity) => familySourceNodeIds.includes(entity.id)),
+    [entities, familySourceNodeIds]
   )
   const selectedEdgeSourceName = useMemo(() => {
     if (!selectedEdge) {
@@ -435,20 +441,17 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   }, [entities, selectedEdge])
 
   const sourceEntityId = useMemo(() => {
-    if (fixedSourceNodeId && entities.some((entity) => entity.id === fixedSourceNodeId)) {
-      return fixedSourceNodeId
-    }
-    if (allowedSourceNodeIds && allowedSourceNodeIds.length > 0) {
-      if (sourceNodeId && allowedSourceNodeIds.includes(sourceNodeId)) {
+    if (isFamilyNodeSelected) {
+      if (sourceNodeId && familySourceNodeIds.includes(sourceNodeId)) {
         return sourceNodeId
       }
-      return allowedSourceNodeIds[0]
+      return familySourceNodeIds[0] ?? ""
     }
-    if (sourceNodeId && entities.some((entity) => entity.id === sourceNodeId)) {
-      return sourceNodeId
+    if (selectedNodeId && entities.some((entity) => entity.id === selectedNodeId)) {
+      return selectedNodeId
     }
-    return selectedNodeId ?? centerEntityId ?? ""
-  }, [allowedSourceNodeIds, centerEntityId, entities, fixedSourceNodeId, selectedNodeId, sourceNodeId])
+    return centerEntityId ?? ""
+  }, [centerEntityId, entities, familySourceNodeIds, isFamilyNodeSelected, selectedNodeId, sourceNodeId])
 
   const targetEntityId = useMemo(() => {
     if (existingTargetId && entities.some((entity) => entity.id === existingTargetId)) {
@@ -546,6 +549,8 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
       setSelectedNodeId(null)
       setSelectedEdge(null)
       setRightPanelMode(null)
+      setEditAction("edit_node")
+      setFamilySourceNodeIds([])
       setSourceNodeId(null)
     }
   })
@@ -604,12 +609,11 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
     onSuccess: () => {
       setGraphRefreshKey((previous) => previous + 1)
       queryClient.invalidateQueries({ queryKey: ["graph:entities", graphId] })
-      if (sourceEntityId) {
+      if (!isFamilyNodeSelected && sourceEntityId) {
         setSelectedNodeId(sourceEntityId)
       }
       setSelectedEdge(null)
-      setFixedSourceNodeId(null)
-      setAllowedSourceNodeIds(null)
+      setEditAction(isFamilyNodeSelected ? "create_linked_node" : "edit_node")
       setNewLinkedName("")
       setNewLinkType("")
       setNewLinkFromRole("")
@@ -632,44 +636,6 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   function onCreateLink(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     createLinkMutation.mutate()
-  }
-
-  function openLinkEditorFromSource(options: { fixedSourceId?: string; allowedSourceIds?: string[] }) {
-    const allowedIds =
-      options.allowedSourceIds && options.allowedSourceIds.length > 0
-        ? options.allowedSourceIds
-        : null
-
-    if (options.fixedSourceId) {
-      setFixedSourceNodeId(options.fixedSourceId)
-      setAllowedSourceNodeIds(null)
-      setSourceNodeId(options.fixedSourceId)
-      setSelectedNodeId(options.fixedSourceId)
-    } else if (allowedIds) {
-      setFixedSourceNodeId(null)
-      setAllowedSourceNodeIds(allowedIds)
-      setSourceNodeId(allowedIds[0])
-      setSelectedNodeId(allowedIds[0] ?? null)
-    } else {
-      setFixedSourceNodeId(null)
-      setAllowedSourceNodeIds(null)
-    }
-
-    setSelectedEdge(null)
-    setCreateMode("new_node")
-    setNewLinkStart("")
-    if (relationshipTypes.length > 0) {
-      const defaultType = relationshipTypes[0]
-      setNewLinkType(defaultType.code)
-      if (defaultType.source_roles.length > 0) {
-        setNewLinkFromRole(defaultType.source_roles[0])
-      }
-      if (defaultType.target_roles.length > 0) {
-        setNewLinkToRole(defaultType.target_roles[0])
-      }
-    }
-    setRightPanelMode("link")
-    setRightExpanded(true)
   }
 
   function onCreateLinkTypeChange(nextType: string) {
@@ -782,9 +748,10 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
     )
   }
 
-  const showNodeEditor = rightPanelMode === "node" && selectedNode !== null
+  const showNodeActionEditor = rightPanelMode === "node" && (selectedNode !== null || isFamilyNodeSelected)
+  const showNodeEditor = showNodeActionEditor && !isFamilyNodeSelected && editAction === "edit_node"
   const showEdgeEditor = rightPanelMode === "edge" && selectedEdge !== null
-  const showLinkEditor = rightPanelMode === "link"
+  const showLinkEditor = showNodeActionEditor && (isFamilyNodeSelected || editAction !== "edit_node")
 
   async function loadNodeDetailIntoEditor(nodeId: string) {
     setIsNodeDetailLoading(true)
@@ -947,6 +914,21 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
 
   const editPanel = (
     <Stack>
+      {showNodeActionEditor ? (
+        <Section className="mb-0">
+          <Card className="px-3 py-2">
+            <label className="block">
+              <FieldLabel compact>Edit action</FieldLabel>
+              <Select value={editAction} onChange={(event) => setEditAction(event.target.value as EditAction)}>
+                {!isFamilyNodeSelected ? <option value="edit_node">Edit node</option> : null}
+                <option value="create_linked_node">Create linked node</option>
+                <option value="link_existing_node">Link existing node</option>
+              </Select>
+            </label>
+          </Card>
+        </Section>
+      ) : null}
+
       {showNodeEditor ? (
         <Section className="mb-0">
           <FormContainer>
@@ -1192,30 +1174,25 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
             <form onSubmit={onCreateLink}>
               <Stack className="gap-3">
                 <label className="block">
-                  <FieldLabel compact>Link action</FieldLabel>
-                  <Select value={createMode} onChange={(event) => setCreateMode(event.target.value as CreateMode)}>
-                    <option value="new_node">Create linked node</option>
-                    <option value="existing_node">Link existing node</option>
-                  </Select>
-                </label>
-                <label className="block">
                   <FieldLabel compact>Source node</FieldLabel>
-                  {fixedSourceNodeId ? (
+                  {isFamilyNodeSelected ? (
+                    <Select
+                      value={sourceEntityId}
+                      onChange={(event) => setSourceNodeId(event.target.value || null)}
+                      required
+                    >
+                      <option value=""></option>
+                      {familySourceEntities.map((entity) => (
+                        <option key={entity.id} value={entity.id}>
+                          {entity.display_name}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
                     <Input
                       value={entities.find((entity) => entity.id === sourceEntityId)?.display_name ?? sourceEntityId}
                       readOnly
                     />
-                  ) : (
-                    <Select value={sourceEntityId} onChange={(event) => setSourceNodeId(event.target.value || null)} required>
-                      <option value=""></option>
-                      {entities
-                        .filter((entity) => !allowedSourceNodeIds || allowedSourceNodeIds.includes(entity.id))
-                        .map((entity) => (
-                          <option key={entity.id} value={entity.id}>
-                            {entity.display_name}
-                          </option>
-                        ))}
-                    </Select>
                   )}
                 </label>
 
@@ -1293,7 +1270,14 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
                   <FieldLabel compact>Relationship active until</FieldLabel>
                   <Input type="datetime-local" value={newLinkEnd} onChange={(event) => setNewLinkEnd(event.target.value)} />
                 </label>
-                <Button type="submit" disabled={createLinkMutation.isPending}>Create link</Button>
+                <Button type="submit" disabled={createLinkMutation.isPending || !sourceEntityId}>
+                  {createMode === "new_node" ? "Create linked node" : "Link existing node"}
+                </Button>
+                {isFamilyNodeSelected && familySourceEntities.length === 0 ? (
+                  <Card variant="danger" className="px-3 py-2 text-xs">
+                    This family node has no linked members available as source nodes.
+                  </Card>
+                ) : null}
                 {createLinkMutation.error ? (
                   <Card variant="danger" className="px-3 py-2 text-xs">
                     Create link failed. Please review inputs and try again.
@@ -1304,7 +1288,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
           </FormContainer>
         </Section>
       ) : (
-        <Card className="px-3 py-2 text-xs text-[var(--console-text-muted)]">Select a node or edge. Use the node + button to create a linked node.</Card>
+        <Card className="px-3 py-2 text-xs text-[var(--console-text-muted)]">Select a node or edge to edit.</Card>
       )}
     </Stack>
   )
@@ -1324,24 +1308,35 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
       selectedEntityId={selectedNodeId}
       showNodeLabels={showNodeLabels}
       showRelationshipLabels={showRelationshipLabels}
-      onNodeSelect={(nodeId) => {
-        setSelectedNodeId(nodeId)
+      onNodeSelect={({ entityId, familySourceEntityIds }) => {
+        setSelectedNodeId(entityId)
         setSelectedEdge(null)
-        if (nodeId.startsWith("family:")) {
-          setRightPanelMode(null)
+        if (entityId.startsWith("family:")) {
+          setFamilySourceNodeIds(familySourceEntityIds ?? [])
+          setSourceNodeId((familySourceEntityIds ?? [])[0] ?? null)
+          setEditAction("create_linked_node")
+          setRightPanelMode("node")
           return
         }
+        setFamilySourceNodeIds([])
+        setSourceNodeId(null)
+        setEditAction("edit_node")
         setRightPanelMode("node")
-        void loadNodeDetailIntoEditor(nodeId)
+        void loadNodeDetailIntoEditor(entityId)
       }}
       onEdgeSelect={(edge) => {
         if (viewMode === "family") {
           setSelectedEdge(null)
+          setSelectedNodeId(null)
+          setFamilySourceNodeIds([])
+          setSourceNodeId(null)
           setRightPanelMode(null)
           return
         }
         setSelectedEdge(edge)
         setSelectedNodeId(null)
+        setFamilySourceNodeIds([])
+        setSourceNodeId(null)
         if (edge) {
           setEdgeType(edge.relationship_type)
           setEdgeFromRole(edge.roles.from)
@@ -1352,25 +1347,6 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
         } else {
           setRightPanelMode(null)
         }
-      }}
-      onAddLinkedNodeFrom={(payload) => {
-        if (payload.entityKind === "family") {
-          const familyMemberIds = entities
-            .filter((entity) =>
-              (payload.familyParentIds ?? []).includes(entity.id) ||
-              (payload.familyChildIds ?? []).includes(entity.id)
-            )
-            .map((entity) => entity.id)
-
-          openLinkEditorFromSource({
-            allowedSourceIds: familyMemberIds
-          })
-          return
-        }
-
-        openLinkEditorFromSource({
-          fixedSourceId: payload.entityId
-        })
       }}
     />
   ) : (

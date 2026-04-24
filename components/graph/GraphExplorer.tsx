@@ -12,7 +12,7 @@ import {
   shouldExpandNode
 } from "@/lib/graph/explorerState"
 import type { LayoutConfig, LayoutMode } from "@/lib/graph/layout"
-import type { Edge, Entity } from "@/types"
+import type { Edge } from "@/types"
 import Card from "@/components/ui/Card"
 import Stack from "@/components/ui/Stack"
 import GraphCanvas from "./GraphCanvas"
@@ -31,14 +31,8 @@ type GraphExplorerProps = {
   selectedEntityId?: string | null
   showNodeLabels?: boolean
   showRelationshipLabels?: boolean
-  onNodeSelect?: (entityId: string) => void
+  onNodeSelect?: (payload: { entityId: string; familySourceEntityIds?: string[] }) => void
   onEdgeSelect?: (edge: Edge | null) => void
-  onAddLinkedNodeFrom?: (payload: {
-    entityId: string
-    entityKind: Entity["entity_kind"]
-    familyParentIds?: string[]
-    familyChildIds?: string[]
-  }) => void
 }
 
 export default function GraphExplorer({
@@ -56,8 +50,7 @@ export default function GraphExplorer({
   showNodeLabels = false,
   showRelationshipLabels = false,
   onNodeSelect,
-  onEdgeSelect,
-  onAddLinkedNodeFrom
+  onEdgeSelect
 }: GraphExplorerProps) {
   const activeCenterEntityId = entityId
 
@@ -176,7 +169,23 @@ export default function GraphExplorer({
         showNodeLabels={showNodeLabels}
         showRelationshipLabels={showRelationshipLabels}
         onNodeClick={(clickedEntityId) => {
-          onNodeSelect?.(clickedEntityId)
+          if (clickedEntityId.startsWith("family:")) {
+            const familySourceEntityIds = new Set<string>()
+            for (const edge of Object.values(graphState.edges)) {
+              if (edge.relationship_type === "family_parent" && edge.to_entity_id === clickedEntityId) {
+                familySourceEntityIds.add(edge.from_entity_id)
+              }
+              if (edge.relationship_type === "family_child" && edge.from_entity_id === clickedEntityId) {
+                familySourceEntityIds.add(edge.to_entity_id)
+              }
+            }
+            onNodeSelect?.({
+              entityId: clickedEntityId,
+              familySourceEntityIds: [...familySourceEntityIds].sort()
+            })
+            return
+          }
+          onNodeSelect?.({ entityId: clickedEntityId })
           const needsExpand = shouldExpandNode(expandedState, scopeKey, clickedEntityId)
           setExpandedState((previous) =>
             applyNodeClickToExpandedState(previous, scopeKey, clickedEntityId)
@@ -188,37 +197,6 @@ export default function GraphExplorer({
         }}
         onEdgeClick={(clickedRelationshipId) => {
           onEdgeSelect?.(graphState.edges[clickedRelationshipId] ?? null)
-        }}
-        onAddLinkedNodeFrom={(node) => {
-          if (!onAddLinkedNodeFrom) {
-            return
-          }
-
-          if (node.entityKind !== "family") {
-            onAddLinkedNodeFrom({
-              entityId: node.entityId,
-              entityKind: node.entityKind
-            })
-            return
-          }
-
-          const familyParentIds = new Set<string>()
-          const familyChildIds = new Set<string>()
-          for (const edge of Object.values(graphState.edges)) {
-            if (edge.relationship_type === "family_parent" && edge.to_entity_id === node.entityId) {
-              familyParentIds.add(edge.from_entity_id)
-            }
-            if (edge.relationship_type === "family_child" && edge.from_entity_id === node.entityId) {
-              familyChildIds.add(edge.to_entity_id)
-            }
-          }
-
-          onAddLinkedNodeFrom({
-            entityId: node.entityId,
-            entityKind: node.entityKind,
-            familyParentIds: [...familyParentIds].sort(),
-            familyChildIds: [...familyChildIds].sort()
-          })
         }}
       />
       {errorMessage ? (
