@@ -11,6 +11,7 @@ import {
   resolveVisibleGraphState,
   shouldExpandNode
 } from "@/lib/graph/explorerState"
+import type { LayoutConfig, LayoutMode } from "@/lib/graph/layout"
 import type { Edge, Entity } from "@/types"
 import Card from "@/components/ui/Card"
 import Stack from "@/components/ui/Stack"
@@ -24,6 +25,8 @@ type GraphExplorerProps = {
   includeInactive: boolean
   depth?: number
   layoutMode?: "auto" | "manual"
+  layoutEngineMode?: LayoutMode
+  layoutConfig?: LayoutConfig
   refreshKey?: number
   selectedEntityId?: string | null
   showNodeLabels?: boolean
@@ -46,6 +49,8 @@ export default function GraphExplorer({
   includeInactive,
   depth = 3,
   layoutMode = "auto",
+  layoutEngineMode = "graph",
+  layoutConfig = { horizontalSpacing: 180, verticalSpacing: 180 },
   refreshKey = 0,
   selectedEntityId = null,
   showNodeLabels = false,
@@ -70,6 +75,7 @@ export default function GraphExplorer({
     graphId,
     activeCenterEntityId,
     viewMode,
+    layoutMode: layoutEngineMode,
     asOf,
     depth,
     includeInactive
@@ -164,6 +170,8 @@ export default function GraphExplorer({
         entities={entities}
         edges={edges}
         layoutMode={layoutMode}
+        layoutEngineMode={layoutEngineMode}
+        layoutConfig={layoutConfig}
         selectedEntityId={selectedEntityId}
         showNodeLabels={showNodeLabels}
         showRelationshipLabels={showRelationshipLabels}

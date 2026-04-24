@@ -17,6 +17,7 @@ function createScopeKey(centerEntityId: string): string {
     graphId: "g1",
     activeCenterEntityId: centerEntityId,
     viewMode: "family",
+    layoutMode: "family_tree",
     asOf: "2026-01-01T00:00:00.000Z",
     depth: 2,
     includeInactive: false
@@ -29,6 +30,7 @@ describe("explorerState", () => {
       graphId: "g1",
       activeCenterEntityId: "e1",
       viewMode: "graph",
+      layoutMode: "graph",
       asOf: "2026-01-01T00:00:00.000Z",
       depth: 1,
       includeInactive: false
@@ -37,6 +39,7 @@ describe("explorerState", () => {
       graphId: "g1",
       activeCenterEntityId: "e1",
       viewMode: "family",
+      layoutMode: "family_tree",
       asOf: "2026-01-01T00:00:00.000Z",
       depth: 1,
       includeInactive: false

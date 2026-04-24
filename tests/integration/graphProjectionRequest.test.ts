@@ -279,4 +279,42 @@ describe("handleGraphProjectionRequest", () => {
       error: { message: "view_mode must be one of: graph, family" }
     })
   })
+
+  it("should_return_empty_graph_and_skip_db_projection_for_virtual_family_entity_id", async () => {
+    const request = new Request("http://localhost", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        entity_id: "family:ec990d5ac7b6a4d13b2b60f2b8017f6c01ac4f43cf0498365eca8beadb7dec20",
+        view_mode: "family",
+        as_of: "2024-06-01T00:00:00.000Z",
+        depth: 1,
+        already_loaded: {
+          entity_ids: [],
+          relationship_ids: []
+        }
+      })
+    })
+
+    const response = await handleGraphProjectionRequest({
+      request,
+      graphId: "g1",
+      entityField: "entity_id",
+      entityMissingMessage: "entity_id is required",
+      entityNotFoundMessage: "Entity does not exist"
+    })
+
+    expect(buildGraphDeltaFromCenterMock).not.toHaveBeenCalled()
+    expect(toFamilyViewGraphMock).not.toHaveBeenCalled()
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      entities: [],
+      edges: [],
+      meta: {
+        truncated: false,
+        node_count: 0,
+        edge_count: 0
+      }
+    })
+  })
 })

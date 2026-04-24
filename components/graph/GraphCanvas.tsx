@@ -3,8 +3,13 @@
 import cytoscape, { type ElementDefinition } from "cytoscape"
 import { useEffect, useMemo, useRef } from "react"
 
+import {
+  resolveLayoutWithFallback,
+  type LayoutConfig,
+  type LayoutMode as LayoutEngineMode,
+  type LayoutOutput
+} from "@/lib/graph/layout"
 import type { Edge, Entity } from "@/types"
-import { computeNodeLevels } from "@/lib/graph/layoutLevels"
 import { normalizeRelationshipTypeCode } from "@/lib/graph/relationshipType"
 import { graphTheme, resolveGraphTheme, type ResolvedGraphTheme } from "@/lib/ui/graphTheme"
 
@@ -12,6 +17,8 @@ type GraphCanvasProps = {
   entities: Entity[]
   edges: Edge[]
   layoutMode?: "auto" | "manual"
+  layoutEngineMode?: LayoutEngineMode
+  layoutConfig?: LayoutConfig
   selectedEntityId?: string | null
   showNodeLabels?: boolean
   showRelationshipLabels?: boolean
@@ -43,53 +50,48 @@ function colorForRelationshipType(value: string): string {
   return "#64748b"
 }
 
-function runAutoLevelLayout(cy: cytoscape.Core, entities: Entity[], edges: Edge[]) {
-  const levels = computeNodeLevels(entities, edges)
-  const entitiesById = new Map(entities.map((entity) => [entity.id, entity]))
-  const idsByLevel = new Map<number, string[]>()
+function applyLayoutOutput(
+  cy: cytoscape.Core,
+  output: LayoutOutput,
+  options?: { animate?: boolean }
+) {
+  const shouldAnimate = options?.animate ?? true
 
-  for (const entity of entities) {
-    const level = levels.get(entity.id) ?? 0
-    const ids = idsByLevel.get(level) ?? []
-    ids.push(entity.id)
-    idsByLevel.set(level, ids)
-  }
-
-  const levelOrder = [...idsByLevel.keys()].sort((a, b) => a - b)
-  for (const level of levelOrder) {
-    const ids = idsByLevel.get(level) ?? []
-    ids.sort((a, b) => {
-      const aLabel = entitiesById.get(a)?.display_name ?? a
-      const bLabel = entitiesById.get(b)?.display_name ?? b
-      return aLabel.localeCompare(bLabel)
-    })
-  }
-
-  const verticalSpacing = 180
-  const horizontalSpacing = 180
-
-  for (const level of levelOrder) {
-    const ids = idsByLevel.get(level) ?? []
-    const centerOffset = (ids.length - 1) / 2
-    for (let index = 0; index < ids.length; index += 1) {
-      const id = ids[index]
-      const node = cy.getElementById(id)
-      if (node.length === 0) {
-        continue
-      }
-      node.animate(
-        {
-          position: {
-            x: (index - centerOffset) * horizontalSpacing,
-            y: level * verticalSpacing
-          }
-        },
-        {
-          duration: 220,
-          easing: "ease-in-out"
+  if (!shouldAnimate) {
+    cy.batch(() => {
+      for (const positionedNode of output.nodes) {
+        const node = cy.getElementById(positionedNode.id)
+        if (node.length === 0) {
+          continue
         }
-      )
+        node.stop()
+        node.position({
+          x: positionedNode.x,
+          y: positionedNode.y
+        })
+      }
+    })
+    return
+  }
+
+  for (const positionedNode of output.nodes) {
+    const node = cy.getElementById(positionedNode.id)
+    if (node.length === 0) {
+      continue
     }
+    node.stop()
+    node.animate(
+      {
+        position: {
+          x: positionedNode.x,
+          y: positionedNode.y
+        }
+      },
+      {
+        duration: 220,
+        easing: "ease-in-out"
+      }
+    )
   }
 }
 
@@ -167,6 +169,24 @@ function buildCanvasStyles(
       }
     },
     {
+      selector: 'edge[routingStyle = "orthogonal"]',
+      style: {
+        "curve-style": "taxi",
+        "taxi-direction": "downward",
+        "taxi-turn": "50%",
+        "taxi-turn-min-distance": 12
+      }
+    },
+    {
+      selector: 'edge[routingStyle = "orthogonal-horizontal"]',
+      style: {
+        "curve-style": "taxi",
+        "taxi-direction": "rightward",
+        "taxi-turn": "50%",
+        "taxi-turn-min-distance": 10
+      }
+    },
+    {
       selector: "edge[line_color]",
       style: {
         "line-color": "data(line_color)"
@@ -195,6 +215,8 @@ export default function GraphCanvas({
   entities,
   edges,
   layoutMode = "auto",
+  layoutEngineMode = "graph",
+  layoutConfig = { horizontalSpacing: 180, verticalSpacing: 180 },
   selectedEntityId,
   showNodeLabels = true,
   showRelationshipLabels = false,
@@ -208,11 +230,22 @@ export default function GraphCanvas({
   const floatingLayerRef = useRef<HTMLDivElement | null>(null)
   const previousTopologyKeyRef = useRef("")
   const previousLayoutModeRef = useRef<"auto" | "manual">(layoutMode)
+  const previousLayoutEngineModeRef = useRef<LayoutEngineMode>(layoutEngineMode)
+  const previousLayoutConfigKeyRef = useRef(`${layoutConfig.horizontalSpacing}|${layoutConfig.verticalSpacing}`)
   const renderNodeAddButtonsRef = useRef<(() => void) | null>(null)
 
   const onNodeClickRef = useRef(onNodeClick)
   const onEdgeClickRef = useRef(onEdgeClick)
   const onAddLinkedNodeFromRef = useRef(onAddLinkedNodeFrom)
+  const resolvedLayout = useMemo(
+    () => resolveLayoutWithFallback(layoutEngineMode, { entities, edges }, layoutConfig),
+    [layoutEngineMode, entities, edges, layoutConfig]
+  )
+  const layoutOutput = resolvedLayout.output
+  const layoutEdgeById = useMemo(
+    () => new Map(layoutOutput.edges.map((edge) => [edge.id, edge])),
+    [layoutOutput.edges]
+  )
 
   useEffect(() => {
     onNodeClickRef.current = onNodeClick
@@ -236,20 +269,35 @@ export default function GraphCanvas({
       }
     }))
 
-    const edgeElements: ElementDefinition[] = edges.map((edge) => ({
-      data: {
-        id: edge.id,
-        source: edge.from_entity_id,
-        target: edge.to_entity_id,
-        relationshipType: edge.relationship_type,
-        relationshipGroup: normalizeRelationshipTypeCode(edge.relationship_type),
-        line_color: colorForRelationshipType(edge.relationship_type),
-        active: edge.active ? "true" : "false"
+    const edgeElements: ElementDefinition[] = edges.map((edge) => {
+      const layoutEdge = layoutEdgeById.get(edge.id)
+      const path =
+        layoutEdge && layoutEdge.path && typeof layoutEdge.path === "object"
+          ? (layoutEdge.path as Record<string, unknown>)
+          : null
+      const routingStyle =
+        path?.kind === "orthogonal_horizontal"
+          ? "orthogonal-horizontal"
+          : path?.kind === "orthogonal"
+            ? "orthogonal"
+            : "default"
+
+      return {
+        data: {
+          id: edge.id,
+          source: edge.from_entity_id,
+          target: edge.to_entity_id,
+          relationshipType: edge.relationship_type,
+          relationshipGroup: normalizeRelationshipTypeCode(edge.relationship_type),
+          line_color: colorForRelationshipType(edge.relationship_type),
+          active: edge.active ? "true" : "false",
+          routingStyle
+        }
       }
-    }))
+    })
 
     return [...nodeElements, ...edgeElements]
-  }, [entities, edges, selectedEntityId])
+  }, [entities, edges, selectedEntityId, layoutEdgeById])
 
   const topologyKey = useMemo(() => {
     const nodeIds = [...entities.map((entity) => entity.id)].sort().join(",")
@@ -509,11 +557,16 @@ export default function GraphCanvas({
 
     const topologyChanged = previousTopologyKeyRef.current !== topologyKey
     const modeChanged = previousLayoutModeRef.current !== layoutMode
+    const layoutEngineChanged = previousLayoutEngineModeRef.current !== layoutEngineMode
+    const layoutConfigKey = `${layoutConfig.horizontalSpacing}|${layoutConfig.verticalSpacing}`
+    const layoutConfigChanged = previousLayoutConfigKeyRef.current !== layoutConfigKey
 
     if (layoutMode === "auto") {
       cy.autoungrabify(true)
-      if (topologyChanged || modeChanged) {
-        runAutoLevelLayout(cy, entities, edges)
+      if (topologyChanged || modeChanged || layoutEngineChanged || layoutConfigChanged) {
+        applyLayoutOutput(cy, layoutOutput, {
+          animate: !layoutConfigChanged
+        })
       }
     } else {
       cy.autoungrabify(false)
@@ -526,9 +579,11 @@ export default function GraphCanvas({
       previousTopologyKeyRef.current = topologyKey
     }
     previousLayoutModeRef.current = layoutMode
+    previousLayoutEngineModeRef.current = layoutEngineMode
+    previousLayoutConfigKeyRef.current = layoutConfigKey
 
     renderNodeAddButtonsRef.current?.()
-  }, [elements, topologyKey, entities, edges, layoutMode])
+  }, [elements, topologyKey, layoutOutput, layoutMode, layoutEngineMode, layoutConfig])
 
   return (
     <div ref={canvasShellRef} className="relative h-[68vh] min-h-[520px] w-full overflow-hidden rounded-xl border border-[var(--graph-canvas-border)]">

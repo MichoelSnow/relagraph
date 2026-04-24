@@ -10,13 +10,14 @@ type ScopeKeyInput = {
   graphId: string
   activeCenterEntityId: string
   viewMode: "graph" | "family"
+  layoutMode: "graph" | "family_tree"
   asOf: string
   depth: number
   includeInactive: boolean
 }
 
 export function buildExplorerScopeKey(input: ScopeKeyInput): string {
-  return `${input.graphId}|${input.activeCenterEntityId}|${input.viewMode}|${input.asOf}|${input.depth}|${input.includeInactive}`
+  return `${input.graphId}|${input.activeCenterEntityId}|${input.viewMode}|${input.layoutMode}|${input.asOf}|${input.depth}|${input.includeInactive}`
 }
 
 export function getScopedExpandedGraph(

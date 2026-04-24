@@ -15,6 +15,7 @@ import {
   updateGraphEntity,
   updateRelationship
 } from "@/lib/api/graphs"
+import type { LayoutMode } from "@/lib/graph/layout"
 import { cx } from "@/lib/ui/cx"
 import type { Edge } from "@/types"
 import GraphExplorer from "@/components/graph/GraphExplorer"
@@ -83,6 +84,8 @@ const RIGHT_PANEL_KEY = "relagraph:workspace:right-panel-expanded"
 const PANEL_STORAGE_EVENT = "relagraph:panel-storage"
 const TEMPORAL_SIMPLE_MODE = true
 const DEFAULT_RELATIONSHIP_START = "1900-01-01T00:00:00.000Z"
+const DEFAULT_HORIZONTAL_SPACING = 180
+const DEFAULT_VERTICAL_SPACING = 180
 const NAME_TYPE_OPTIONS = ["legal", "birth", "chosen", "nickname", "maiden", "alias", "religious"] as const
 const NAME_LANGUAGE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "", label: "Unspecified" },
@@ -268,7 +271,7 @@ function PanelShell({ title, side, expanded, onToggle, children }: PanelShellPro
             {side === "left" ? (expanded ? <ChevronLeftIcon /> : <ChevronRightIcon />) : expanded ? <ChevronRightIcon /> : <ChevronLeftIcon />}
           </button>
         </Stack>
-        {expanded ? <Stack className="flex-1 overflow-y-auto p-2">{children}</Stack> : null}
+        {expanded ? <Stack className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-2">{children}</Stack> : null}
       </Stack>
     </Stack>
   )
@@ -281,10 +284,13 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   const [graphRefreshKey, setGraphRefreshKey] = useState(0)
   const [asOf, setAsOf] = useState(initialAsOf)
   const [graphDepth, setGraphDepth] = useState(3)
-  const [viewMode, setViewMode] = useState<"graph" | "family">("graph")
+  const [viewMode, setViewMode] = useState<"graph" | "family">("family")
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>("family_tree")
+  const [horizontalSpacing, setHorizontalSpacing] = useState(DEFAULT_HORIZONTAL_SPACING)
+  const [verticalSpacing, setVerticalSpacing] = useState(DEFAULT_VERTICAL_SPACING)
   const [showNodeLabels, setShowNodeLabels] = useState(true)
   const [showRelationshipLabels, setShowRelationshipLabels] = useState(false)
-  const [layoutMode, setLayoutMode] = useState<"auto" | "manual">("auto")
+  const [shapeMode, setShapeMode] = useState<"auto" | "manual">("auto")
   const [includeInactive, setIncludeInactive] = useState(TEMPORAL_SIMPLE_MODE)
   const [leftExpanded, setLeftExpanded] = useStoredBoolean(LEFT_PANEL_KEY, true)
   const [rightExpanded, setRightExpanded] = useStoredBoolean(RIGHT_PANEL_KEY, true)
@@ -403,6 +409,13 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   }, [newLinkToRole, createLinkTargetRoleOptions])
 
   const centerEntityId = useMemo(() => entities[0]?.id ?? null, [entities])
+  const layoutConfig = useMemo(
+    () => ({
+      horizontalSpacing,
+      verticalSpacing
+    }),
+    [horizontalSpacing, verticalSpacing]
+  )
 
   const selectedNode = useMemo(
     () => entities.find((entity) => entity.id === selectedNodeId) ?? null,
@@ -865,6 +878,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
             onChange={(event) => {
               const nextViewMode = event.target.value as "graph" | "family"
               setViewMode(nextViewMode)
+              setLayoutMode(nextViewMode === "family" ? "family_tree" : "graph")
               setSelectedEdge(null)
               setRightPanelMode(null)
             }}
@@ -875,11 +889,41 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
         </label>
 
         <Stack className="gap-2">
-          <ToggleRow label="Auto shape" checked={layoutMode === "auto"} onChange={(next) => setLayoutMode(next ? "auto" : "manual")} />
+          <ToggleRow label="Auto shape" checked={shapeMode === "auto"} onChange={(next) => setShapeMode(next ? "auto" : "manual")} />
           <ToggleRow label="Node labels" checked={showNodeLabels} onChange={setShowNodeLabels} />
           <ToggleRow label="Edge labels" checked={showRelationshipLabels} onChange={setShowRelationshipLabels} />
           {!TEMPORAL_SIMPLE_MODE ? <ToggleRow label="Inactive" checked={includeInactive} onChange={setIncludeInactive} /> : null}
         </Stack>
+
+        <Card className="px-3 py-2">
+          <Stack className="gap-2">
+            <FieldLabel compact>Layout spacing</FieldLabel>
+            <label className="block">
+              <FieldLabel compact>Horizontal ({horizontalSpacing})</FieldLabel>
+              <Input
+                type="range"
+                min={80}
+                max={360}
+                step={10}
+                value={horizontalSpacing}
+                onChange={(event) => setHorizontalSpacing(Number(event.target.value))}
+                className="w-full max-w-full border-0 bg-transparent px-0 py-0"
+              />
+            </label>
+            <label className="block">
+              <FieldLabel compact>Vertical ({verticalSpacing})</FieldLabel>
+              <Input
+                type="range"
+                min={80}
+                max={360}
+                step={10}
+                value={verticalSpacing}
+                onChange={(event) => setVerticalSpacing(Number(event.target.value))}
+                className="w-full max-w-full border-0 bg-transparent px-0 py-0"
+              />
+            </label>
+          </Stack>
+        </Card>
 
         <Card className="px-3 py-2">
           <Stack className="gap-2">
@@ -1273,7 +1317,9 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
       asOf={asOf}
       includeInactive={includeInactive}
       depth={graphDepth}
-      layoutMode={layoutMode}
+      layoutMode={shapeMode}
+      layoutEngineMode={layoutMode}
+      layoutConfig={layoutConfig}
       refreshKey={graphRefreshKey}
       selectedEntityId={selectedNodeId}
       showNodeLabels={showNodeLabels}
