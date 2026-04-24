@@ -1,16 +1,10 @@
 "use client"
 
-import { useMutation, useQuery } from "@tanstack/react-query"
-import { useMemo, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { useMemo } from "react"
 
-import { fetchGraphExpand, fetchGraphView } from "@/lib/api/graph"
-import { EMPTY_GRAPH_STATE, toGraphState, type GraphState } from "@/lib/api/graphState"
-import {
-  applyNodeClickToExpandedState,
-  buildExplorerScopeKey,
-  resolveVisibleGraphState,
-  shouldExpandNode
-} from "@/lib/graph/explorerState"
+import { fetchGraphView } from "@/lib/api/graph"
+import { EMPTY_GRAPH_STATE, toGraphState } from "@/lib/api/graphState"
 import type { LayoutConfig, LayoutMode } from "@/lib/graph/layout"
 import type { Edge } from "@/types"
 import Card from "@/components/ui/Card"
@@ -54,26 +48,6 @@ export default function GraphExplorer({
 }: GraphExplorerProps) {
   const activeCenterEntityId = entityId
 
-  const [expandedState, setExpandedState] = useState<{
-    scopeKey: string
-    activeEntityId: string | null
-    graphByEntityId: Record<string, GraphState>
-  }>({
-    scopeKey: "",
-    activeEntityId: null,
-    graphByEntityId: {}
-  })
-
-  const scopeKey = buildExplorerScopeKey({
-    graphId,
-    activeCenterEntityId,
-    viewMode,
-    layoutMode: layoutEngineMode,
-    asOf,
-    depth,
-    includeInactive
-  })
-
   const viewQuery = useQuery({
     queryKey: [
       "graph:view",
@@ -109,53 +83,9 @@ export default function GraphExplorer({
     () => (viewQuery.data ? toGraphState(viewQuery.data) : EMPTY_GRAPH_STATE),
     [viewQuery.data]
   )
-  const graphState = useMemo(
-    () => resolveVisibleGraphState(baseGraph, expandedState, scopeKey),
-    [baseGraph, expandedState, scopeKey]
-  )
-
-  const expandMutation = useMutation({
-    mutationFn: async (targetEntityId: string) =>
-      fetchGraphExpand({
-        graph_id: graphId,
-        entity_id: targetEntityId,
-        view_mode: viewMode,
-        as_of: asOf,
-        depth,
-        filters: {
-          entity_types: [],
-          relationship_types: [],
-          include_inactive: includeInactive
-        },
-        already_loaded: {
-          entity_ids: [],
-          relationship_ids: []
-        }
-      }),
-    onSuccess: (delta, targetEntityId) => {
-      const deltaGraph = toGraphState(delta)
-      setExpandedState((previous) => {
-        const previousGraphByEntityId =
-          previous.scopeKey === scopeKey ? previous.graphByEntityId : {}
-
-        return {
-          scopeKey,
-          activeEntityId: targetEntityId,
-          graphByEntityId: {
-            ...previousGraphByEntityId,
-            [targetEntityId]: deltaGraph
-          }
-        }
-      })
-    }
-  })
-
-  const entities = useMemo(() => Object.values(graphState.entities), [graphState.entities])
-  const edges = useMemo(() => Object.values(graphState.edges), [graphState.edges])
-  const errorMessage =
-    (viewQuery.error as Error | null)?.message ??
-    (expandMutation.error as Error | null)?.message ??
-    null
+  const entities = useMemo(() => Object.values(baseGraph.entities), [baseGraph.entities])
+  const edges = useMemo(() => Object.values(baseGraph.edges), [baseGraph.edges])
+  const errorMessage = (viewQuery.error as Error | null)?.message ?? null
 
   return (
     <Stack className="relative h-full min-h-[520px] gap-0">
@@ -171,7 +101,7 @@ export default function GraphExplorer({
         onNodeClick={(clickedEntityId) => {
           if (clickedEntityId.startsWith("family:")) {
             const familySourceEntityIds = new Set<string>()
-            for (const edge of Object.values(graphState.edges)) {
+            for (const edge of Object.values(baseGraph.edges)) {
               if (edge.relationship_type === "family_parent" && edge.to_entity_id === clickedEntityId) {
                 familySourceEntityIds.add(edge.from_entity_id)
               }
@@ -186,17 +116,9 @@ export default function GraphExplorer({
             return
           }
           onNodeSelect?.({ entityId: clickedEntityId })
-          const needsExpand = shouldExpandNode(expandedState, scopeKey, clickedEntityId)
-          setExpandedState((previous) =>
-            applyNodeClickToExpandedState(previous, scopeKey, clickedEntityId)
-          )
-
-          if (needsExpand) {
-            expandMutation.mutate(clickedEntityId)
-          }
         }}
         onEdgeClick={(clickedRelationshipId) => {
-          onEdgeSelect?.(graphState.edges[clickedRelationshipId] ?? null)
+          onEdgeSelect?.(baseGraph.edges[clickedRelationshipId] ?? null)
         }}
       />
       {errorMessage ? (

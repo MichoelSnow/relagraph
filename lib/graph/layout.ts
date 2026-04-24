@@ -13,6 +13,11 @@ export type LayoutOutput = {
   edges: { id: string; path?: any }[]
 }
 
+export type NodePosition = { x: number; y: number }
+export type PreviousPositions = Record<string, NodePosition>
+export type PreviousOrder = Record<string, string[]>
+export type LayoutChangeType = "selection_only" | "local_add" | "local_remove" | "global_change"
+
 export type LayoutConfig = {
   horizontalSpacing: number
   verticalSpacing: number
@@ -76,6 +81,28 @@ function resolvePetOwnerAndDependent(edge: Edge, entitiesById: Map<string, Entit
   return null
 }
 
+function resolveParentAndDependent(edge: Edge, entitiesById: Map<string, Entity>): { parentId: string; dependentId: string } | null {
+  const relationshipType = normalizeRelationshipType(edge.relationship_type)
+  if (relationshipType === "family_child") {
+    return { parentId: edge.from_entity_id, dependentId: edge.to_entity_id }
+  }
+  if (relationshipType === "parent_child") {
+    const fromRole = normalizeRole(edge.roles.from)
+    const toRole = normalizeRole(edge.roles.to)
+    if (fromRole === "parent" && toRole === "child") {
+      return { parentId: edge.from_entity_id, dependentId: edge.to_entity_id }
+    }
+    if (toRole === "parent" && fromRole === "child") {
+      return { parentId: edge.to_entity_id, dependentId: edge.from_entity_id }
+    }
+  }
+  const ownerAndDependent = resolvePetOwnerAndDependent(edge, entitiesById)
+  if (ownerAndDependent) {
+    return { parentId: ownerAndDependent.ownerId, dependentId: ownerAndDependent.dependentId }
+  }
+  return null
+}
+
 function readBirthDateLikeValue(entity: Entity): string | null {
   const raw = entity as unknown as Record<string, unknown>
   const directBirthDate = raw.birth_date
@@ -110,6 +137,38 @@ function toTimestamp(value: string | null): number | null {
   return Number.isFinite(timestamp) ? timestamp : null
 }
 
+function compareEntityIdsByStableOrder(
+  leftId: string,
+  rightId: string,
+  entitiesById: Map<string, Entity>,
+  birthTimestampById: Map<string, number | null>
+): number {
+  if (leftId === rightId) {
+    return 0
+  }
+
+  const leftBirth = birthTimestampById.get(leftId) ?? null
+  const rightBirth = birthTimestampById.get(rightId) ?? null
+  if (leftBirth !== null && rightBirth !== null && leftBirth !== rightBirth) {
+    return leftBirth - rightBirth
+  }
+  if (leftBirth !== null && rightBirth === null) {
+    return -1
+  }
+  if (leftBirth === null && rightBirth !== null) {
+    return 1
+  }
+
+  const leftLabel = entitiesById.get(leftId)?.display_name.trim() ?? leftId
+  const rightLabel = entitiesById.get(rightId)?.display_name.trim() ?? rightId
+  const labelCompare = leftLabel.localeCompare(rightLabel, "en")
+  if (labelCompare !== 0) {
+    return labelCompare
+  }
+
+  return leftId.localeCompare(rightId, "en")
+}
+
 function resolveSpacingConfig(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   config?: any
@@ -134,6 +193,9 @@ function computeLevelPositions(input: LayoutInput, config?: LayoutConfig): Layou
   const { horizontalSpacing, verticalSpacing } = resolveSpacingConfig(config)
   const levels = computeNodeLevels(entities, edges)
   const entitiesById = new Map(entities.map((entity) => [entity.id, entity]))
+  const birthTimestampById = new Map(
+    entities.map((entity) => [entity.id, toTimestamp(readBirthDateLikeValue(entity))])
+  )
   const idsByLevel = new Map<number, string[]>()
 
   for (const entity of entities) {
@@ -147,11 +209,7 @@ function computeLevelPositions(input: LayoutInput, config?: LayoutConfig): Layou
   const levelOrder = [...idsByLevel.keys()].sort((a, b) => a - b)
   for (const level of levelOrder) {
     const ids = idsByLevel.get(level) ?? []
-    ids.sort((a, b) => {
-      const aLabel = entitiesById.get(a)?.display_name ?? a
-      const bLabel = entitiesById.get(b)?.display_name ?? b
-      return aLabel.localeCompare(bLabel)
-    })
+    ids.sort((a, b) => compareEntityIdsByStableOrder(a, b, entitiesById, birthTimestampById))
 
     const centerOffset = (ids.length - 1) / 2
     for (let index = 0; index < ids.length; index += 1) {
@@ -176,7 +234,6 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
   const { entities, edges } = input
   const { horizontalSpacing, verticalSpacing } = resolveSpacingConfig(config)
   const entitiesById = new Map(entities.map((entity) => [entity.id, entity]))
-  const entityOrderById = new Map(entities.map((entity, index) => [entity.id, index]))
   const birthTimestampById = new Map(
     entities.map((entity) => [entity.id, toTimestamp(readBirthDateLikeValue(entity))])
   )
@@ -298,11 +355,7 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
         }
       }
     }
-    component.sort(
-      (a, b) =>
-        (entityOrderById.get(a) ?? Number.MAX_SAFE_INTEGER) -
-        (entityOrderById.get(b) ?? Number.MAX_SAFE_INTEGER)
-    )
+    component.sort((a, b) => compareEntityIdsByStableOrder(a, b, entitiesById, birthTimestampById))
     const rootId = component[0]
     romanticComponents.set(rootId, component)
     for (const memberId of component) {
@@ -402,9 +455,7 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
       continue
     }
     const sortedOwnerIds = [...ownerIds].sort(
-      (leftId, rightId) =>
-        (entityOrderById.get(leftId) ?? Number.MAX_SAFE_INTEGER) -
-        (entityOrderById.get(rightId) ?? Number.MAX_SAFE_INTEGER)
+      (leftId, rightId) => compareEntityIdsByStableOrder(leftId, rightId, entitiesById, birthTimestampById)
     )
     const primaryOwnerId = sortedOwnerIds[0]
     if (primaryOwnerId) {
@@ -425,7 +476,7 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
       if (aBirth === null && bBirth !== null) {
         return 1
       }
-      return (entityOrderById.get(a) ?? Number.MAX_SAFE_INTEGER) - (entityOrderById.get(b) ?? Number.MAX_SAFE_INTEGER)
+      return compareEntityIdsByStableOrder(a, b, entitiesById, birthTimestampById)
     })
     dependentsByParentId.set(parentId, sortedDependentIds)
   }
@@ -453,7 +504,12 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
       const aComponentRootId = romanticComponentRootByMemberId.get(a)
       const bComponentRootId = romanticComponentRootByMemberId.get(b)
       if (aComponentRootId && bComponentRootId && aComponentRootId !== bComponentRootId) {
-        return (entityOrderById.get(aComponentRootId) ?? Number.MAX_SAFE_INTEGER) - (entityOrderById.get(bComponentRootId) ?? Number.MAX_SAFE_INTEGER)
+        return compareEntityIdsByStableOrder(
+          aComponentRootId,
+          bComponentRootId,
+          entitiesById,
+          birthTimestampById
+        )
       }
       if (aComponentRootId && !bComponentRootId) {
         return -1
@@ -461,7 +517,7 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
       if (!aComponentRootId && bComponentRootId) {
         return 1
       }
-      return (entityOrderById.get(a) ?? Number.MAX_SAFE_INTEGER) - (entityOrderById.get(b) ?? Number.MAX_SAFE_INTEGER)
+      return compareEntityIdsByStableOrder(a, b, entitiesById, birthTimestampById)
     })
     idsByLevel.set(level, sortedIds)
     for (let index = 0; index < sortedIds.length; index += 1) {
@@ -543,9 +599,12 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
       if (leftLevel !== rightLevel) {
         return leftLevel - rightLevel
       }
-      const leftOrder = orderRankById.get(leftId) ?? (entityOrderById.get(leftId) ?? Number.MAX_SAFE_INTEGER)
-      const rightOrder = orderRankById.get(rightId) ?? (entityOrderById.get(rightId) ?? Number.MAX_SAFE_INTEGER)
-      return leftOrder - rightOrder
+      const leftOrder = orderRankById.get(leftId) ?? Number.MAX_SAFE_INTEGER
+      const rightOrder = orderRankById.get(rightId) ?? Number.MAX_SAFE_INTEGER
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder
+      }
+      return compareEntityIdsByStableOrder(leftId, rightId, entitiesById, birthTimestampById)
     })
 
   let currentLeftX = 0
@@ -562,7 +621,13 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
   }
 
   const sortedFamilyIds = [...familyParentIdsByFamilyId.keys()].sort(
-    (leftId, rightId) => (levels.get(leftId) ?? 0) - (levels.get(rightId) ?? 0)
+    (leftId, rightId) => {
+      const levelCompare = (levels.get(leftId) ?? 0) - (levels.get(rightId) ?? 0)
+      if (levelCompare !== 0) {
+        return levelCompare
+      }
+      return compareEntityIdsByStableOrder(leftId, rightId, entitiesById, birthTimestampById)
+    }
   )
   for (const familyId of sortedFamilyIds) {
     const parentIds = familyParentIdsByFamilyId.get(familyId)
@@ -589,7 +654,7 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
       continue
     }
     const sortedMemberIds = [...component].sort(
-      (leftId, rightId) => (entityOrderById.get(leftId) ?? Number.MAX_SAFE_INTEGER) - (entityOrderById.get(rightId) ?? Number.MAX_SAFE_INTEGER)
+      (leftId, rightId) => compareEntityIdsByStableOrder(leftId, rightId, entitiesById, birthTimestampById)
     )
     const centerX =
       sortedMemberIds.reduce((sum, memberId) => sum + (xById.get(memberId) ?? 0), 0) /
@@ -692,6 +757,477 @@ function estimateFamilyCrossings(input: LayoutInput, output: LayoutOutput): numb
   }
 
   return countSegmentCrossings(parentSegments) + countSegmentCrossings(childSegments)
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+function buildNodePositionRecord(nodes: LayoutOutput["nodes"]): PreviousPositions {
+  return Object.fromEntries(nodes.map((node) => [node.id, { x: node.x, y: node.y }]))
+}
+
+export function deriveFamilyOrderFromLayout(
+  input: LayoutInput,
+  output: LayoutOutput
+): PreviousOrder {
+  const entitiesById = new Map(input.entities.map((entity) => [entity.id, entity]))
+  const xById = new Map(output.nodes.map((node) => [node.id, node.x]))
+  const dependentsByParentId = new Map<string, Set<string>>()
+
+  for (const edge of input.edges) {
+    const relation = resolveParentAndDependent(edge, entitiesById)
+    if (!relation) {
+      continue
+    }
+    if (!dependentsByParentId.has(relation.parentId)) {
+      dependentsByParentId.set(relation.parentId, new Set<string>())
+    }
+    dependentsByParentId.get(relation.parentId)?.add(relation.dependentId)
+  }
+
+  const order: PreviousOrder = {}
+  for (const [parentId, dependentIds] of dependentsByParentId) {
+    const ordered = [...dependentIds].sort((leftId, rightId) => {
+      const leftX = xById.get(leftId)
+      const rightX = xById.get(rightId)
+      if (leftX !== undefined && rightX !== undefined && leftX !== rightX) {
+        return leftX - rightX
+      }
+      return leftId.localeCompare(rightId, "en")
+    })
+    order[parentId] = ordered
+  }
+
+  return order
+}
+
+type IncrementalFamilyLayoutInput = {
+  baseOutput: LayoutOutput
+  previousPositions: PreviousPositions
+  previousOrder: PreviousOrder
+  previousInput?: LayoutInput
+  changeType: Extract<LayoutChangeType, "local_add" | "local_remove">
+  addedNodeIds: string[]
+  removedNodeIds: string[]
+  addedEdgeIds: string[]
+  removedEdgeIds: string[]
+  config?: LayoutConfig
+}
+
+type IncrementalFamilyLayoutResult = {
+  output: LayoutOutput
+  nextPositions: PreviousPositions
+  nextOrder: PreviousOrder
+  affectedNodeIds: string[]
+}
+
+function mergeOrderPreservingExisting(
+  existingOrder: string[] | undefined,
+  nextIds: string[],
+  xById: Map<string, number>
+): string[] {
+  const existing = (existingOrder ?? []).filter((id) => nextIds.includes(id))
+  const newIds = nextIds.filter((id) => !existing.includes(id))
+  if (newIds.length === 0) {
+    return existing
+  }
+
+  const withBaseX = newIds
+    .map((id) => ({ id, x: xById.get(id) ?? Number.MAX_SAFE_INTEGER }))
+    .sort((left, right) => {
+      if (left.x !== right.x) {
+        return left.x - right.x
+      }
+      return left.id.localeCompare(right.id, "en")
+    })
+
+  const merged = [...existing]
+  for (const { id } of withBaseX) {
+    const insertBeforeIndex = merged.findIndex((existingId) => {
+      const currentX = xById.get(existingId) ?? Number.MAX_SAFE_INTEGER
+      const nextX = xById.get(id) ?? Number.MAX_SAFE_INTEGER
+      return nextX < currentX
+    })
+    if (insertBeforeIndex === -1) {
+      merged.push(id)
+    } else {
+      merged.splice(insertBeforeIndex, 0, id)
+    }
+  }
+
+  return merged
+}
+
+export function applyIncrementalFamilyTreeLayout(
+  input: LayoutInput,
+  params: IncrementalFamilyLayoutInput
+): IncrementalFamilyLayoutResult {
+  const { baseOutput, previousPositions, previousOrder, previousInput, config } = params
+  const { horizontalSpacing } = resolveSpacingConfig(config)
+  const minGap = horizontalSpacing * 0.92
+  const localShiftCap = horizontalSpacing * 0.9
+  const entitiesById = new Map(input.entities.map((entity) => [entity.id, entity]))
+  const baseNodeById = new Map(baseOutput.nodes.map((node) => [node.id, node]))
+  const baseXById = new Map(baseOutput.nodes.map((node) => [node.id, node.x]))
+  const currentNodeIds = new Set(input.entities.map((entity) => entity.id))
+
+  const dependentsByParentId = new Map<string, string[]>()
+  const parentIdsByDependentId = new Map<string, string[]>()
+  const parentIdsByFamilyId = new Map<string, string[]>()
+  for (const edge of input.edges) {
+    if (normalizeRelationshipType(edge.relationship_type) === "family_parent") {
+      const parentIds = parentIdsByFamilyId.get(edge.to_entity_id) ?? []
+      parentIds.push(edge.from_entity_id)
+      parentIdsByFamilyId.set(edge.to_entity_id, parentIds)
+    }
+    const relation = resolveParentAndDependent(edge, entitiesById)
+    if (!relation) {
+      continue
+    }
+    const existingDependents = dependentsByParentId.get(relation.parentId) ?? []
+    if (!existingDependents.includes(relation.dependentId)) {
+      existingDependents.push(relation.dependentId)
+      dependentsByParentId.set(relation.parentId, existingDependents)
+    }
+    const existingParents = parentIdsByDependentId.get(relation.dependentId) ?? []
+    if (!existingParents.includes(relation.parentId)) {
+      existingParents.push(relation.parentId)
+      parentIdsByDependentId.set(relation.dependentId, existingParents)
+    }
+  }
+
+  const changedNodeIds = new Set<string>([
+    ...params.addedNodeIds,
+    ...params.removedNodeIds
+  ])
+  const previousEdgesById = new Map((previousInput?.edges ?? []).map((edge) => [edge.id, edge]))
+  const currentEdgesById = new Map(input.edges.map((edge) => [edge.id, edge]))
+  for (const edgeId of params.addedEdgeIds) {
+    const edge = currentEdgesById.get(edgeId)
+    if (!edge) {
+      continue
+    }
+    changedNodeIds.add(edge.from_entity_id)
+    changedNodeIds.add(edge.to_entity_id)
+  }
+  for (const edgeId of params.removedEdgeIds) {
+    const edge = previousEdgesById.get(edgeId)
+    if (!edge) {
+      continue
+    }
+    changedNodeIds.add(edge.from_entity_id)
+    changedNodeIds.add(edge.to_entity_id)
+  }
+
+  const affectedParentIds = new Set<string>()
+  const maybeMarkParent = (nodeId: string) => {
+    if (dependentsByParentId.has(nodeId)) {
+      affectedParentIds.add(nodeId)
+    }
+    const directParents = parentIdsByDependentId.get(nodeId) ?? []
+    for (const parentId of directParents) {
+      affectedParentIds.add(parentId)
+    }
+    if (nodeId.startsWith("family:")) {
+      affectedParentIds.add(nodeId)
+    }
+  }
+  for (const nodeId of changedNodeIds) {
+    maybeMarkParent(nodeId)
+  }
+
+  const affectedNodeIds = new Set<string>()
+  for (const parentId of affectedParentIds) {
+    affectedNodeIds.add(parentId)
+    const dependents = dependentsByParentId.get(parentId) ?? []
+    for (const dependentId of dependents) {
+      affectedNodeIds.add(dependentId)
+    }
+    const familyParents = parentIdsByFamilyId.get(parentId) ?? []
+    for (const familyParentId of familyParents) {
+      affectedNodeIds.add(familyParentId)
+    }
+  }
+  for (const nodeId of params.addedNodeIds) {
+    affectedNodeIds.add(nodeId)
+  }
+
+  const nextXById = new Map<string, number>()
+  const nextYById = new Map<string, number>()
+
+  for (const node of baseOutput.nodes) {
+    if (!affectedNodeIds.has(node.id) && previousPositions[node.id]) {
+      nextXById.set(node.id, previousPositions[node.id].x)
+      nextYById.set(node.id, previousPositions[node.id].y)
+      continue
+    }
+    const previous = previousPositions[node.id]
+    if (previous) {
+      const targetX = previous.x + clamp(node.x - previous.x, -localShiftCap, localShiftCap)
+      nextXById.set(node.id, targetX)
+      nextYById.set(node.id, previous.y + clamp(node.y - previous.y, -localShiftCap, localShiftCap))
+    } else {
+      nextXById.set(node.id, node.x)
+      nextYById.set(node.id, node.y)
+    }
+  }
+
+  const nextOrder = deriveFamilyOrderFromLayout(input, baseOutput)
+  for (const [parentId, dependents] of dependentsByParentId) {
+    const preserved = mergeOrderPreservingExisting(previousOrder[parentId], dependents, baseXById)
+    nextOrder[parentId] = preserved
+  }
+
+  for (const parentId of affectedParentIds) {
+    const orderedDependents = nextOrder[parentId] ?? []
+    if (orderedDependents.length === 0) {
+      continue
+    }
+    const parentX = nextXById.get(parentId) ?? baseNodeById.get(parentId)?.x ?? 0
+    const startX = parentX - ((orderedDependents.length - 1) / 2) * horizontalSpacing
+    for (let index = 0; index < orderedDependents.length; index += 1) {
+      const dependentId = orderedDependents[index]
+      if (!currentNodeIds.has(dependentId)) {
+        continue
+      }
+      const currentX = nextXById.get(dependentId) ?? startX + index * horizontalSpacing
+      const targetX = startX + index * horizontalSpacing
+      const maxShift = previousPositions[dependentId] ? localShiftCap : horizontalSpacing
+      nextXById.set(dependentId, currentX + clamp(targetX - currentX, -maxShift, maxShift))
+    }
+  }
+
+  for (const [familyId, parentIds] of parentIdsByFamilyId) {
+    if (parentIds.length === 0 || !nextXById.has(familyId)) {
+      continue
+    }
+    const parentXs = parentIds
+      .map((parentId) => nextXById.get(parentId))
+      .filter((value): value is number => value !== undefined)
+    if (parentXs.length === 0) {
+      continue
+    }
+    const anchoredX = parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length
+    const currentX = nextXById.get(familyId) ?? anchoredX
+    const maxShift = previousPositions[familyId] ? localShiftCap : horizontalSpacing
+    nextXById.set(familyId, currentX + clamp(anchoredX - currentX, -maxShift, maxShift))
+  }
+
+  const levelById = new Map(
+    baseOutput.nodes.map((node) => [node.id, Math.round(node.y / (config?.verticalSpacing ?? VERTICAL_SPACING))])
+  )
+  const levelIds = new Map<number, string[]>()
+  for (const node of baseOutput.nodes) {
+    const level = levelById.get(node.id) ?? 0
+    const ids = levelIds.get(level) ?? []
+    ids.push(node.id)
+    levelIds.set(level, ids)
+  }
+  for (const ids of levelIds.values()) {
+    const sortedIds = [...ids].sort((leftId, rightId) => (nextXById.get(leftId) ?? 0) - (nextXById.get(rightId) ?? 0))
+    for (let index = 1; index < sortedIds.length; index += 1) {
+      const leftId = sortedIds[index - 1]
+      const rightId = sortedIds[index]
+      const leftX = nextXById.get(leftId) ?? 0
+      const rightX = nextXById.get(rightId) ?? 0
+      const delta = rightX - leftX
+      if (delta >= minGap) {
+        continue
+      }
+      if (!affectedNodeIds.has(rightId)) {
+        continue
+      }
+      nextXById.set(rightId, leftX + minGap)
+    }
+  }
+
+  const nodes = baseOutput.nodes.map((node) => ({
+    id: node.id,
+    x: nextXById.get(node.id) ?? node.x,
+    y: nextYById.get(node.id) ?? node.y
+  }))
+
+  const nextPositions = buildNodePositionRecord(nodes)
+  return {
+    output: {
+      nodes,
+      edges: baseOutput.edges
+    },
+    nextPositions,
+    nextOrder,
+    affectedNodeIds: [...affectedNodeIds]
+  }
+}
+
+export function applyFamilyTreeMinimalMovement(
+  input: LayoutInput,
+  baseOutput: LayoutOutput,
+  previousPositions: PreviousPositions,
+  config?: LayoutConfig
+): LayoutOutput {
+  const { horizontalSpacing, verticalSpacing } = resolveSpacingConfig(config)
+  const minGap = horizontalSpacing * 0.92
+  const maxExistingShiftX = horizontalSpacing * 0.7
+  const maxExistingShiftY = verticalSpacing * 0.5
+
+  const nodesById = new Map(baseOutput.nodes.map((node) => [node.id, node]))
+  const entitiesById = new Map(input.entities.map((entity) => [entity.id, entity]))
+
+  const xById = new Map<string, number>()
+  const yById = new Map<string, number>()
+  const levelById = new Map<string, number>()
+  const idsByLevel = new Map<number, string[]>()
+
+  for (const node of baseOutput.nodes) {
+    const level = Math.round(node.y / verticalSpacing)
+    levelById.set(node.id, level)
+    const ids = idsByLevel.get(level) ?? []
+    ids.push(node.id)
+    idsByLevel.set(level, ids)
+  }
+
+  const sortByBaseOrder = (leftId: string, rightId: string): number => {
+    const leftNode = nodesById.get(leftId)
+    const rightNode = nodesById.get(rightId)
+    if (!leftNode || !rightNode) {
+      return leftId.localeCompare(rightId, "en")
+    }
+    if (leftNode.x !== rightNode.x) {
+      return leftNode.x - rightNode.x
+    }
+    return leftId.localeCompare(rightId, "en")
+  }
+
+  const neighborIdsById = new Map<string, Set<string>>()
+  const registerNeighbor = (leftId: string, rightId: string) => {
+    if (!neighborIdsById.has(leftId)) {
+      neighborIdsById.set(leftId, new Set<string>())
+    }
+    neighborIdsById.get(leftId)?.add(rightId)
+  }
+
+  const parentIdsByFamilyId = new Map<string, string[]>()
+  for (const edge of input.edges) {
+    registerNeighbor(edge.from_entity_id, edge.to_entity_id)
+    registerNeighbor(edge.to_entity_id, edge.from_entity_id)
+    if (normalizeRelationshipType(edge.relationship_type) === "family_parent") {
+      const parentIds = parentIdsByFamilyId.get(edge.to_entity_id) ?? []
+      parentIds.push(edge.from_entity_id)
+      parentIdsByFamilyId.set(edge.to_entity_id, parentIds)
+    }
+  }
+
+  const isExisting = (id: string): boolean => previousPositions[id] !== undefined
+
+  const resolveTargetX = (id: string): number => {
+    const baseX = nodesById.get(id)?.x ?? 0
+    const previous = previousPositions[id]
+    if (!previous) {
+      const neighbors = [...(neighborIdsById.get(id) ?? new Set<string>())]
+        .map((neighborId) => xById.get(neighborId) ?? previousPositions[neighborId]?.x)
+        .filter((value): value is number => value !== undefined)
+      if (neighbors.length > 0) {
+        const anchorX = neighbors.reduce((sum, value) => sum + value, 0) / neighbors.length
+        return (anchorX + baseX) / 2
+      }
+      return baseX
+    }
+    const delta = baseX - previous.x
+    return previous.x + clamp(delta, -maxExistingShiftX, maxExistingShiftX)
+  }
+
+  const resolveTargetY = (id: string): number => {
+    const baseY = nodesById.get(id)?.y ?? 0
+    const previous = previousPositions[id]
+    if (!previous) {
+      return baseY
+    }
+    return previous.y + clamp(baseY - previous.y, -maxExistingShiftY, maxExistingShiftY)
+  }
+
+  for (const [level, levelIds] of idsByLevel) {
+    const sortedIds = [...levelIds].sort(sortByBaseOrder)
+    const targetXById = new Map(sortedIds.map((id) => [id, resolveTargetX(id)]))
+
+    let cursorX: number | null = null
+    for (const id of sortedIds) {
+      const targetX = targetXById.get(id) ?? 0
+      if (cursorX === null) {
+        xById.set(id, targetX)
+        cursorX = targetX
+        continue
+      }
+      const nextX = Math.max(targetX, cursorX + minGap)
+      xById.set(id, nextX)
+      cursorX = nextX
+    }
+
+    for (const id of sortedIds) {
+      yById.set(id, resolveTargetY(id))
+    }
+
+    idsByLevel.set(level, sortedIds)
+  }
+
+  for (const [familyId, parentIds] of parentIdsByFamilyId) {
+    if (parentIds.length === 0) {
+      continue
+    }
+    const parentXs = parentIds
+      .map((parentId) => xById.get(parentId))
+      .filter((value): value is number => value !== undefined)
+    if (parentXs.length === 0 || !xById.has(familyId)) {
+      continue
+    }
+    const anchoredX = parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length
+    const currentX = xById.get(familyId) ?? anchoredX
+    const maxShift = isExisting(familyId) ? maxExistingShiftX : horizontalSpacing
+    xById.set(familyId, currentX + clamp(anchoredX - currentX, -maxShift, maxShift))
+  }
+
+  for (const [, sortedIds] of idsByLevel) {
+    let cursorX: number | null = null
+    for (const id of sortedIds) {
+      const candidate = xById.get(id) ?? 0
+      if (cursorX === null) {
+        cursorX = candidate
+        xById.set(id, candidate)
+        continue
+      }
+      const nextX = Math.max(candidate, cursorX + minGap)
+      xById.set(id, nextX)
+      cursorX = nextX
+    }
+
+    // Compact locally on removal without global recentering.
+    for (let index = sortedIds.length - 2; index >= 0; index -= 1) {
+      const id = sortedIds[index]
+      const nextId = sortedIds[index + 1]
+      const currentX = xById.get(id) ?? 0
+      const nextX = xById.get(nextId) ?? currentX + minGap
+      const maxAllowed = nextX - minGap
+      if (currentX > maxAllowed) {
+        xById.set(id, maxAllowed)
+      }
+    }
+  }
+
+  const nodes = baseOutput.nodes.map((node) => {
+    const entityKind = entitiesById.get(node.id)?.entity_kind
+    const resolvedX = xById.get(node.id) ?? node.x
+    const resolvedY = yById.get(node.id) ?? node.y
+    // Keep family nodes on explicit half-level lines from the base layout.
+    if (entityKind === "family") {
+      return { id: node.id, x: resolvedX, y: node.y }
+    }
+    return { id: node.id, x: resolvedX, y: resolvedY }
+  })
+
+  return {
+    nodes,
+    edges: baseOutput.edges
+  }
 }
 
 function resolveFamilyLayoutFallbackReason(

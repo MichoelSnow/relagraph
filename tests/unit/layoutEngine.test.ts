@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest"
 
-import { layouts, resolveLayoutWithFallback } from "@/lib/graph/layout"
+import {
+  applyIncrementalFamilyTreeLayout,
+  deriveFamilyOrderFromLayout,
+  layouts,
+  resolveLayoutWithFallback
+} from "@/lib/graph/layout"
 import type { Edge, Entity } from "@/types"
 
 describe("layout engines", () => {
@@ -483,7 +488,7 @@ describe("layout engines", () => {
     expect((byId.get("c2")?.x ?? 0) < (byId.get("c1")?.x ?? 0)).toBe(true)
   })
 
-  it("should_fallback_to_stable_insertion_order_for_siblings_without_birth_date", () => {
+  it("should_fallback_to_stable_name_order_for_siblings_without_birth_date", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent" },
       { id: "f1", entity_kind: "family", display_name: "Family" },
@@ -529,7 +534,7 @@ describe("layout engines", () => {
     )
     const byId = new Map(output.nodes.map((node) => [node.id, node]))
 
-    expect((byId.get("c2")?.x ?? 0) < (byId.get("c1")?.x ?? 0)).toBe(true)
+    expect((byId.get("c1")?.x ?? 0) < (byId.get("c2")?.x ?? 0)).toBe(true)
   })
 
   it("should_fallback_to_graph_layout_when_family_has_too_many_parents", () => {
@@ -667,5 +672,115 @@ describe("layout engines", () => {
 
     expect(resolved.resolvedMode).toBe("graph")
     expect(resolved.fallbackReason).toBe("unsupported_structure")
+  })
+
+  it("should_only_move_local_family_subtree_for_incremental_add", () => {
+    const entities: Entity[] = [
+      { id: "p1", entity_kind: "person", display_name: "Parent 1" },
+      { id: "f1", entity_kind: "family", display_name: "Family 1" },
+      { id: "a1", entity_kind: "person", display_name: "A Child 1" },
+      { id: "a2", entity_kind: "person", display_name: "A Child 2" },
+      { id: "p2", entity_kind: "person", display_name: "Parent 2" },
+      { id: "f2", entity_kind: "family", display_name: "Family 2" },
+      { id: "b1", entity_kind: "person", display_name: "B Child 1" }
+    ]
+    const edges: Edge[] = [
+      {
+        id: "e1",
+        relationship_type: "family_parent",
+        from_entity_id: "p1",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e2",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "a1",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e3",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "a2",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e4",
+        relationship_type: "family_parent",
+        from_entity_id: "p2",
+        to_entity_id: "f2",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e5",
+        relationship_type: "family_child",
+        from_entity_id: "f2",
+        to_entity_id: "b1",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      }
+    ]
+
+    const spacing = { horizontalSpacing: 100, verticalSpacing: 80 }
+    const previousOutput = layouts.family_tree({ entities, edges }, spacing)
+    const previousPositions = Object.fromEntries(previousOutput.nodes.map((node) => [node.id, { x: node.x, y: node.y }]))
+    const previousOrder = deriveFamilyOrderFromLayout({ entities, edges }, previousOutput)
+
+    const nextEntities: Entity[] = [
+      ...entities,
+      { id: "a3", entity_kind: "person", display_name: "A Child 3" }
+    ]
+    const nextEdges: Edge[] = [
+      ...edges,
+      {
+        id: "e6",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "a3",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      }
+    ]
+    const baseNextOutput = layouts.family_tree({ entities: nextEntities, edges: nextEdges }, spacing)
+
+    const incremental = applyIncrementalFamilyTreeLayout(
+      { entities: nextEntities, edges: nextEdges },
+      {
+        baseOutput: baseNextOutput,
+        previousPositions,
+        previousOrder,
+        previousInput: { entities, edges },
+        changeType: "local_add",
+        addedNodeIds: ["a3"],
+        removedNodeIds: [],
+        addedEdgeIds: ["e6"],
+        removedEdgeIds: [],
+        config: spacing
+      }
+    )
+
+    const byId = new Map(incremental.output.nodes.map((node) => [node.id, node]))
+    expect(Math.abs((byId.get("p2")?.x ?? 0) - (previousPositions.p2?.x ?? 0))).toBeLessThan(1e-6)
+    expect(Math.abs((byId.get("f2")?.x ?? 0) - (previousPositions.f2?.x ?? 0))).toBeLessThan(1e-6)
+    expect(Math.abs((byId.get("b1")?.x ?? 0) - (previousPositions.b1?.x ?? 0))).toBeLessThan(1e-6)
+    expect((byId.get("a3")?.x ?? 0) > (byId.get("a2")?.x ?? 0)).toBe(true)
   })
 })
