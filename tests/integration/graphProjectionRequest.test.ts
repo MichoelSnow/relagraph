@@ -211,12 +211,9 @@ describe("handleGraphProjectionRequest", () => {
       meta: { truncated: false, node_count: 1, edge_count: 0 }
     }
     const familyGraphResponse: GraphResponse = {
-      entities: [
-        { id: "e1", entity_kind: "person", display_name: "Alex" },
-        { id: "family:abc", entity_kind: "family", display_name: "Family" }
-      ],
+      entities: [{ id: "e1", entity_kind: "person", display_name: "Alex" }],
       edges: [],
-      meta: { truncated: false, node_count: 2, edge_count: 0 }
+      meta: { truncated: false, node_count: 1, edge_count: 0 }
     }
 
     buildGraphDeltaFromCenterMock.mockResolvedValueOnce(baseGraphResponse)
@@ -280,12 +277,14 @@ describe("handleGraphProjectionRequest", () => {
     })
   })
 
-  it("should_return_empty_graph_and_skip_db_projection_for_virtual_family_entity_id", async () => {
+  it("should_return_404_when_requesting_nonexistent_entity_id", async () => {
+    buildGraphDeltaFromCenterMock.mockResolvedValueOnce(null)
+
     const request = new Request("http://localhost", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        entity_id: "family:ec990d5ac7b6a4d13b2b60f2b8017f6c01ac4f43cf0498365eca8beadb7dec20",
+        entity_id: "missing-entity-id",
         view_mode: "family",
         as_of: "2024-06-01T00:00:00.000Z",
         depth: 1,
@@ -304,16 +303,13 @@ describe("handleGraphProjectionRequest", () => {
       entityNotFoundMessage: "Entity does not exist"
     })
 
-    expect(buildGraphDeltaFromCenterMock).not.toHaveBeenCalled()
+    expect(buildGraphDeltaFromCenterMock).toHaveBeenCalledTimes(1)
     expect(toFamilyViewGraphMock).not.toHaveBeenCalled()
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({
-      entities: [],
-      edges: [],
-      meta: {
-        truncated: false,
-        node_count: 0,
-        edge_count: 0
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "entity_not_found",
+        message: "Entity does not exist"
       }
     })
   })

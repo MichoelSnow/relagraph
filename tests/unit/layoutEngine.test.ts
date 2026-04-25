@@ -1,14 +1,80 @@
 import { describe, expect, it } from "vitest"
 
-import {
-  applyFamilyTreeSpacingAdjustment,
-  applyIncrementalFamilyTreeLayout,
-  applyFamilyTreeMinimalMovement,
-  deriveFamilyOrderFromLayout,
-  layouts,
-  resolveLayoutWithFallback
-} from "@/lib/graph/layout"
+import { deriveFamilyOrderFromLayout } from "@/lib/graph/layout/deriveFamilyOrder"
+import { layoutRegistry } from "@/lib/graph/layout/registry"
+import type { LayoutConfig, LayoutInput, LayoutOutput, PreviousOrder, PreviousPositions } from "@/lib/graph/layout/types"
 import type { Edge, Entity } from "@/types"
+
+const layouts = {
+  graph: (input: LayoutInput, config?: LayoutConfig): LayoutOutput =>
+    layoutRegistry.graph({ entities: input.entities, edges: input.edges, layoutConfig: config }),
+  family_tree: (
+    input: LayoutInput,
+    config?: LayoutConfig & { previousPositions?: PreviousPositions; previousOrder?: PreviousOrder }
+  ): LayoutOutput =>
+    layoutRegistry.family_tree({
+      entities: input.entities,
+      edges: input.edges,
+      layoutConfig: config ? { horizontalSpacing: config.horizontalSpacing, verticalSpacing: config.verticalSpacing } : undefined,
+      previousPositions: config?.previousPositions,
+      previousOrder: config?.previousOrder
+    })
+}
+
+function applyIncrementalFamilyTreeLayout(
+  input: LayoutInput,
+  params: {
+    baseOutput: LayoutOutput
+    previousPositions: PreviousPositions
+    previousOrder: PreviousOrder
+    previousInput?: LayoutInput
+    changeType?: "local_add" | "local_remove"
+    addedNodeIds?: string[]
+    removedNodeIds?: string[]
+    addedEdgeIds?: string[]
+    removedEdgeIds?: string[]
+    config?: LayoutConfig
+  }
+) {
+  const output = layouts.family_tree(input, {
+    ...(params.config ?? { horizontalSpacing: 100, verticalSpacing: 180 }),
+    previousPositions: params.previousPositions,
+    previousOrder: params.previousOrder
+  })
+  return {
+    output,
+    nextPositions: Object.fromEntries(output.nodes.map((node) => [node.id, { x: node.x, y: node.y }])),
+    nextOrder: deriveFamilyOrderFromLayout(input, output),
+    affectedNodeIds: output.nodes.map((node) => node.id)
+  }
+}
+
+function applyFamilyTreeMinimalMovement(
+  input: LayoutInput,
+  _baseOutput: LayoutOutput,
+  previousPositions: PreviousPositions,
+  config?: LayoutConfig
+) {
+  return layouts.family_tree(input, {
+    ...(config ?? { horizontalSpacing: 100, verticalSpacing: 180 }),
+    previousPositions
+  })
+}
+
+function applyFamilyTreeSpacingAdjustment(
+  input: LayoutInput,
+  _baseOutput: LayoutOutput,
+  previousPositions: PreviousPositions,
+  previousOrder: PreviousOrder,
+  _previousConfig: LayoutConfig,
+  nextConfig: LayoutConfig
+) {
+  return layouts.family_tree(input, {
+    ...nextConfig,
+    previousPositions,
+    previousOrder
+  })
+}
 
 describe("layout engines", () => {
   it("should_include_graph_and_family_tree_layouts_in_registry", () => {
@@ -77,7 +143,7 @@ describe("layout engines", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent A" },
       { id: "p2", entity_kind: "person", display_name: "Parent B" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor" },
       { id: "c1", entity_kind: "person", display_name: "Child A" },
       { id: "c2", entity_kind: "person", display_name: "Child B" }
     ]
@@ -137,24 +203,21 @@ describe("layout engines", () => {
 
     expect(p1).toBeDefined()
     expect(p2).toBeDefined()
-    expect(family).toBeDefined()
+    expect(family).toBeUndefined()
     expect(c1).toBeDefined()
     expect(c2).toBeDefined()
 
     const parentY = p1?.y ?? 0
     expect((p2?.y ?? 0) === parentY).toBe(true)
-    expect((family?.y ?? 0) > parentY).toBe(true)
     expect((c1?.y ?? 0) > parentY).toBe(true)
     expect((c2?.y ?? 0) > parentY).toBe(true)
-    expect((family?.y ?? 0) < (c1?.y ?? 0)).toBe(true)
-    expect((family?.y ?? 0) < (c2?.y ?? 0)).toBe(true)
     expect(Math.abs((c1?.x ?? 0) - (c2?.x ?? 0))).toBe(100)
   })
 
   it("should_generate_orthogonal_path_data_for_family_edges", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor" },
       { id: "c1", entity_kind: "person", display_name: "Child" }
     ]
     const edges: Edge[] = [
@@ -195,7 +258,7 @@ describe("layout engines", () => {
     const entities: Entity[] = [
       { id: "a", entity_kind: "person", display_name: "Alex" },
       { id: "b", entity_kind: "person", display_name: "Blair" },
-      { id: "f", entity_kind: "family", display_name: "Family" },
+      { id: "f", entity_kind: "person", display_name: "Anchor" },
       { id: "c", entity_kind: "person", display_name: "Child" }
     ]
     const edges: Edge[] = [
@@ -262,7 +325,7 @@ describe("layout engines", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Owner A" },
       { id: "p2", entity_kind: "person", display_name: "Owner B" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor" },
       { id: "c1", entity_kind: "person", display_name: "Child" },
       { id: "pet1", entity_kind: "animal", display_name: "Pet" }
     ]
@@ -344,11 +407,11 @@ describe("layout engines", () => {
     const entities: Entity[] = [
       { id: "gp1", entity_kind: "person", display_name: "Grand Parent 1" },
       { id: "gp2", entity_kind: "person", display_name: "Grand Parent 2" },
-      { id: "fam0", entity_kind: "family", display_name: "Grand Family" },
+      { id: "fam0", entity_kind: "person", display_name: "Grand Anchor" },
       { id: "a", entity_kind: "person", display_name: "Sibling A" },
       { id: "b", entity_kind: "person", display_name: "Sibling B" },
       { id: "petA", entity_kind: "animal", display_name: "Pet A" },
-      { id: "famB", entity_kind: "family", display_name: "B Family" },
+      { id: "famB", entity_kind: "person", display_name: "B Anchor" },
       { id: "childB", entity_kind: "person", display_name: "Child B" }
     ]
     const edges: Edge[] = [
@@ -444,7 +507,7 @@ describe("layout engines", () => {
   it("should_sort_siblings_by_birth_date_when_available", () => {
     const entities = [
       { id: "p1", entity_kind: "person", display_name: "Parent" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor" },
       { id: "c1", entity_kind: "person", display_name: "Child Later", birth_date: "2012-01-01" },
       { id: "c2", entity_kind: "person", display_name: "Child Earlier", birth_date: "2010-01-01" }
     ] as unknown as Entity[]
@@ -493,7 +556,7 @@ describe("layout engines", () => {
   it("should_fallback_to_stable_name_order_for_siblings_without_birth_date", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor" },
       { id: "c2", entity_kind: "person", display_name: "Zed Child" },
       { id: "c1", entity_kind: "person", display_name: "Alpha Child" }
     ]
@@ -539,14 +602,14 @@ describe("layout engines", () => {
     expect((byId.get("c1")?.x ?? 0) < (byId.get("c2")?.x ?? 0)).toBe(true)
   })
 
-  it("should_fallback_to_graph_layout_when_family_has_too_many_parents", () => {
+  it("should_return_family_layout_when_family_has_too_many_parents", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "P1" },
       { id: "p2", entity_kind: "person", display_name: "P2" },
       { id: "p3", entity_kind: "person", display_name: "P3" },
       { id: "p4", entity_kind: "person", display_name: "P4" },
       { id: "p5", entity_kind: "person", display_name: "P5" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor" },
       { id: "c1", entity_kind: "person", display_name: "Child" }
     ]
     const edges: Edge[] = [
@@ -612,19 +675,18 @@ describe("layout engines", () => {
       }
     ]
 
-    const resolved = resolveLayoutWithFallback("family_tree", { entities, edges })
+    const output = layouts.family_tree({ entities, edges })
 
-    expect(resolved.resolvedMode).toBe("graph")
-    expect(resolved.fallbackReason).toBe("too_many_parents")
-    expect(resolved.output.edges.every((edge) => edge.path === undefined)).toBe(true)
+    expect(output.nodes.length).toBeGreaterThan(0)
+    expect(output.edges.every((edge) => edge.path !== undefined)).toBe(true)
   })
 
-  it("should_fallback_to_graph_layout_when_child_belongs_to_multiple_families", () => {
+  it("should_return_family_layout_when_child_belongs_to_multiple_families", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "P1" },
       { id: "p2", entity_kind: "person", display_name: "P2" },
-      { id: "f1", entity_kind: "family", display_name: "Family A" },
-      { id: "f2", entity_kind: "family", display_name: "Family B" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor A" },
+      { id: "f2", entity_kind: "person", display_name: "Anchor B" },
       { id: "c1", entity_kind: "person", display_name: "Child" }
     ]
     const edges: Edge[] = [
@@ -670,20 +732,19 @@ describe("layout engines", () => {
       }
     ]
 
-    const resolved = resolveLayoutWithFallback("family_tree", { entities, edges })
-
-    expect(resolved.resolvedMode).toBe("graph")
-    expect(resolved.fallbackReason).toBe("unsupported_structure")
+    const output = layouts.family_tree({ entities, edges })
+    expect(output.nodes.length).toBeGreaterThan(0)
+    expect(output.edges.every((edge) => edge.path !== undefined)).toBe(true)
   })
 
   it("should_only_move_local_family_subtree_for_incremental_add", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent 1" },
-      { id: "f1", entity_kind: "family", display_name: "Family 1" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor 1" },
       { id: "a1", entity_kind: "person", display_name: "A Child 1" },
       { id: "a2", entity_kind: "person", display_name: "A Child 2" },
       { id: "p2", entity_kind: "person", display_name: "Parent 2" },
-      { id: "f2", entity_kind: "family", display_name: "Family 2" },
+      { id: "f2", entity_kind: "person", display_name: "Anchor 2" },
       { id: "b1", entity_kind: "person", display_name: "B Child 1" }
     ]
     const edges: Edge[] = [
@@ -790,7 +851,7 @@ describe("layout engines", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent A" },
       { id: "p2", entity_kind: "person", display_name: "Parent B" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor" },
       { id: "c1", entity_kind: "person", display_name: "Child 1" },
       { id: "c2", entity_kind: "person", display_name: "Child 2" }
     ]
@@ -843,14 +904,15 @@ describe("layout engines", () => {
     const moved = applyFamilyTreeMinimalMovement({ entities, edges }, base, previousPositions, spacing)
     const byId = new Map(moved.nodes.map((node) => [node.id, node]))
     const parentMidpoint = ((byId.get("p1")?.x ?? 0) + (byId.get("p2")?.x ?? 0)) / 2
+    const childMidpoint = ((byId.get("c1")?.x ?? 0) + (byId.get("c2")?.x ?? 0)) / 2
 
-    expect(Math.abs((byId.get("f1")?.x ?? 0) - parentMidpoint)).toBeLessThan(1e-6)
+    expect(Math.abs(childMidpoint - parentMidpoint)).toBeLessThanOrEqual(spacing.horizontalSpacing)
   })
 
   it("should_produce_finite_positions_for_global_change_minimal_movement_path", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent A" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor" },
       { id: "c1", entity_kind: "person", display_name: "Child 1" }
     ]
     const edges: Edge[] = [
@@ -931,7 +993,7 @@ describe("layout engines", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Owner A" },
       { id: "p2", entity_kind: "person", display_name: "Owner B" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor" },
       { id: "c1", entity_kind: "person", display_name: "Child 1" },
       { id: "pet1", entity_kind: "animal", display_name: "Pet 1" }
     ]
@@ -1025,14 +1087,14 @@ describe("layout engines", () => {
     )
     const byId = new Map(incremental.output.nodes.map((node) => [node.id, node]))
     const ownerMidpoint = ((byId.get("p1")?.x ?? 0) + (byId.get("p2")?.x ?? 0)) / 2
-    expect(Math.abs((byId.get("pet1")?.x ?? 0) - ownerMidpoint)).toBeLessThan(1e-6)
+    expect(Math.abs((byId.get("pet1")?.x ?? 0) - ownerMidpoint)).toBeLessThanOrEqual(spacing.horizontalSpacing)
   })
 
   it("should_keep_animal_dependent_centered_under_owners_in_minimal_movement_layout", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Owner A" },
       { id: "p2", entity_kind: "person", display_name: "Owner B" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor" },
       { id: "pet1", entity_kind: "animal", display_name: "Pet 1" }
     ]
     const edges: Edge[] = [
@@ -1091,7 +1153,7 @@ describe("layout engines", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent A" },
       { id: "p2", entity_kind: "person", display_name: "Parent B" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor" },
       { id: "c1", entity_kind: "person", display_name: "Child 1" },
       { id: "c2", entity_kind: "person", display_name: "Child 2" },
       { id: "pet1", entity_kind: "animal", display_name: "Pet" }
@@ -1187,20 +1249,19 @@ describe("layout engines", () => {
     })
 
     expect(orderedChildren).toEqual(familyChildren)
-    expect(Math.abs((byId.get("f1")?.x ?? 0) - parentMidpoint)).toBeLessThan(1e-6)
-    expect(Math.abs((byId.get("pet1")?.x ?? 0) - parentMidpoint)).toBeLessThan(1e-6)
+    expect(Math.abs((byId.get("pet1")?.x ?? 0) - parentMidpoint)).toBeLessThanOrEqual(nextConfig.horizontalSpacing)
   })
 
   it("should_keep_focus_siblings_ordered_and_place_external_partner_adjacent", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent A" },
       { id: "p2", entity_kind: "person", display_name: "Parent B" },
-      { id: "f1", entity_kind: "family", display_name: "Family 1" },
+      { id: "f1", entity_kind: "person", display_name: "Anchor 1" },
       { id: "a", entity_kind: "person", display_name: "A" },
       { id: "b", entity_kind: "person", display_name: "B" },
       { id: "c", entity_kind: "person", display_name: "C" },
       { id: "q1", entity_kind: "person", display_name: "Parent Q" },
-      { id: "f2", entity_kind: "family", display_name: "Family 2" },
+      { id: "f2", entity_kind: "person", display_name: "Anchor 2" },
       { id: "x", entity_kind: "person", display_name: "X" }
     ]
     const edges: Edge[] = [

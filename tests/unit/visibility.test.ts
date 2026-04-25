@@ -4,29 +4,18 @@ import { computeVisibleSubgraph } from "@/lib/graph/visibility"
 import type { Edge, Entity } from "@/types"
 
 describe("computeVisibleSubgraph", () => {
-  it("treats family connector as zero-cost for hop counting", () => {
+  it("includes direct parent-child neighbors within one hop", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
       { id: "c1", entity_kind: "person", display_name: "Child" }
     ]
     const edges: Edge[] = [
       {
         id: "e1",
-        relationship_type: "family_parent",
+        relationship_type: "parent_child",
         from_entity_id: "p1",
-        to_entity_id: "f1",
-        roles: { from: "parent", to: "family" },
-        active: true,
-        start: "2026-01-01T00:00:00.000Z",
-        end: null
-      },
-      {
-        id: "e2",
-        relationship_type: "family_child",
-        from_entity_id: "f1",
         to_entity_id: "c1",
-        roles: { from: "family", to: "child" },
+        roles: { from: "parent", to: "child" },
         active: true,
         start: "2026-01-01T00:00:00.000Z",
         end: null
@@ -34,8 +23,8 @@ describe("computeVisibleSubgraph", () => {
     ]
 
     const visible = computeVisibleSubgraph({ entities, edges, focusedNodeId: "p1", distance: 1 })
-    expect(visible.entities.map((entity) => entity.id)).toEqual(["p1", "f1", "c1"])
-    expect(visible.edges.map((edge) => edge.id)).toEqual(["e1", "e2"])
+    expect(visible.entities.map((entity) => entity.id)).toEqual(["p1", "c1"])
+    expect(visible.edges.map((edge) => edge.id)).toEqual(["e1"])
   })
 
   it("returns nodes within BFS distance from focus", () => {
@@ -119,29 +108,18 @@ describe("computeVisibleSubgraph", () => {
     expect(visible.edges.map((edge) => edge.id)).toEqual(["e1", "e2"])
   })
 
-  it("includes family nodes when linked parent/child nodes are included", () => {
+  it("keeps focus node only at zero distance", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent" },
-      { id: "f1", entity_kind: "family", display_name: "Family" },
       { id: "c1", entity_kind: "person", display_name: "Child" }
     ]
     const edges: Edge[] = [
       {
         id: "e1",
-        relationship_type: "family_parent",
+        relationship_type: "parent_child",
         from_entity_id: "p1",
-        to_entity_id: "f1",
-        roles: { from: "parent", to: "family" },
-        active: true,
-        start: "2026-01-01T00:00:00.000Z",
-        end: null
-      },
-      {
-        id: "e2",
-        relationship_type: "family_child",
-        from_entity_id: "f1",
         to_entity_id: "c1",
-        roles: { from: "family", to: "child" },
+        roles: { from: "parent", to: "child" },
         active: true,
         start: "2026-01-01T00:00:00.000Z",
         end: null
@@ -150,7 +128,7 @@ describe("computeVisibleSubgraph", () => {
 
     const visible = computeVisibleSubgraph({ entities, edges, focusedNodeId: "c1", distance: 0 })
 
-    expect(visible.entities.map((entity) => entity.id)).toEqual(["f1", "c1"])
-    expect(visible.edges.map((edge) => edge.id)).toEqual(["e2"])
+    expect(visible.entities.map((entity) => entity.id)).toEqual(["c1"])
+    expect(visible.edges.map((edge) => edge.id)).toEqual([])
   })
 })

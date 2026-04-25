@@ -1,6 +1,6 @@
 export type Entity = {
   id: string
-  entity_kind: "person" | "animal" | "place" | "family"
+  entity_kind: "person" | "animal" | "place"
   display_name: string
 }
 

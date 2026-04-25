@@ -64,8 +64,11 @@ export async function fetchGraphEntities(graphId: string): Promise<Entity[]> {
 
 export async function createGraphEntity(
   graphId: string,
-  input: { entity_kind: "person" | "animal" | "place" | "family"; display_name: string }
+  input: { entity_kind: "person" | "animal" | "place"; display_name: string }
 ): Promise<Entity> {
+  if ((input as { entity_kind?: string }).entity_kind === "family") {
+    throw new Error("Family nodes are no longer supported")
+  }
   const response = await fetch(`/api/v1/graphs/${graphId}/entities`, {
     method: "POST",
     headers: {
@@ -108,7 +111,7 @@ type CreateRelationshipIntervalResponse = {
 }
 
 type UpdateEntityInput = {
-  entity_kind?: "person" | "animal" | "place" | "family"
+  entity_kind?: "person" | "animal" | "place"
   display_name?: string
   entity_name?: {
     name_text?: string
@@ -194,6 +197,9 @@ export async function updateGraphEntity(
   entityId: string,
   input: UpdateEntityInput
 ): Promise<GraphEntityDetail> {
+  if ((input as { entity_kind?: string }).entity_kind === "family") {
+    throw new Error("Family nodes are no longer supported")
+  }
   const response = await fetch(`/api/v1/graphs/${graphId}/entities/${entityId}`, {
     method: "PATCH",
     headers: {

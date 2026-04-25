@@ -1,5 +1,5 @@
 import type { Edge, Entity } from "@/types"
-import type { LayoutChangeType } from "@/lib/graph/layout"
+import type { LayoutChangeType } from "@/lib/graph/layout/types"
 
 type ChangeInput = {
   previousEntities: Entity[]

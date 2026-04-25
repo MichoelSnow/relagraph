@@ -6,7 +6,7 @@ import type { Edge, Entity } from "@/types"
 function buildBaseGraph(): { entities: Entity[]; edges: Edge[] } {
   const entities: Entity[] = [
     { id: "p1", entity_kind: "person", display_name: "Parent" },
-    { id: "f1", entity_kind: "family", display_name: "Family" },
+    { id: "a1", entity_kind: "person", display_name: "Anchor" },
     { id: "c1", entity_kind: "person", display_name: "Child 1" }
   ]
   const edges: Edge[] = [
@@ -14,7 +14,7 @@ function buildBaseGraph(): { entities: Entity[]; edges: Edge[] } {
       id: "e1",
       relationship_type: "family_parent",
       from_entity_id: "p1",
-      to_entity_id: "f1",
+      to_entity_id: "a1",
       roles: { from: "parent", to: "family" },
       active: true,
       start: "2026-01-01T00:00:00.000Z",
@@ -23,7 +23,7 @@ function buildBaseGraph(): { entities: Entity[]; edges: Edge[] } {
     {
       id: "e2",
       relationship_type: "family_child",
-      from_entity_id: "f1",
+      from_entity_id: "a1",
       to_entity_id: "c1",
       roles: { from: "family", to: "child" },
       active: true,
@@ -64,7 +64,7 @@ describe("classifyLayoutChange", () => {
       {
         id: "e3",
         relationship_type: "family_child",
-        from_entity_id: "f1",
+        from_entity_id: "a1",
         to_entity_id: "c2",
         roles: { from: "family", to: "child" },
         active: true,

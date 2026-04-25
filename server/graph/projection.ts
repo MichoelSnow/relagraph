@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto"
-
 import { and, eq, inArray } from "drizzle-orm"
 
 import { getDb } from "@/db/client"
@@ -48,25 +46,9 @@ type RelationshipBundle = {
 }
 
 const TIMELESS_RELATIONSHIP_START = "1900-01-01T00:00:00.000Z"
-const FAMILY_NODE_DISPLAY_NAME = "Family"
-
-export type FamilyNode = {
-  id: string
-  entity_kind: "family"
-}
-
-type FamilyGroup = {
-  familyNode: FamilyNode
-  parentIds: string[]
-  childIds: string[]
-}
 
 function normalizeRelationshipType(value: string): string {
   return value.trim().toLowerCase().replace(/[-\s]+/g, "_")
-}
-
-function isParentChildRelationship(edge: Edge): boolean {
-  return normalizeRelationshipType(edge.relationship_type) === "parent_child"
 }
 
 function isSiblingRelationship(edge: Edge): boolean {
@@ -165,187 +147,28 @@ function resolveRelationshipEdge(
   }
 }
 
-export function deriveFamilyNodes(edges: Edge[]): FamilyNode[] {
-  const parentIdsByChildId = new Map<string, Set<string>>()
-
-  for (const edge of edges) {
-    if (!isParentChildRelationship(edge)) {
-      continue
-    }
-
-    const fromRole = edge.roles.from.toLowerCase()
-    const toRole = edge.roles.to.toLowerCase()
-
-    const fromIsParent = fromRole === "parent"
-    const toIsParent = toRole === "parent"
-    const fromIsChild = fromRole === "child"
-    const toIsChild = toRole === "child"
-
-    let parentId: string | null = null
-    let childId: string | null = null
-
-    if (fromIsParent && toIsChild) {
-      parentId = edge.from_entity_id
-      childId = edge.to_entity_id
-    } else if (toIsParent && fromIsChild) {
-      parentId = edge.to_entity_id
-      childId = edge.from_entity_id
-    }
-
-    if (!parentId || !childId) {
-      continue
-    }
-
-    const parentIds = parentIdsByChildId.get(childId) ?? new Set<string>()
-    parentIds.add(parentId)
-    parentIdsByChildId.set(childId, parentIds)
-  }
-
-  const parentSetSignatures = new Set<string>()
-  for (const parentIds of parentIdsByChildId.values()) {
-    if (parentIds.size === 0) {
-      continue
-    }
-    parentSetSignatures.add([...parentIds].sort().join("|"))
-  }
-
-  const familyNodes: FamilyNode[] = []
-  for (const signature of [...parentSetSignatures].sort()) {
-    const signatureHash = createHash("sha256").update(signature).digest("hex")
-    familyNodes.push({
-      id: `family:${signatureHash}`,
-      entity_kind: "family"
-    })
-  }
-
-  return familyNodes
-}
-
-function deriveFamilyGroups(edges: Edge[]): FamilyGroup[] {
-  const parentIdsByChildId = new Map<string, Set<string>>()
-
-  for (const edge of edges) {
-    if (!isParentChildRelationship(edge)) {
-      continue
-    }
-
-    const fromRole = edge.roles.from.toLowerCase()
-    const toRole = edge.roles.to.toLowerCase()
-
-    if (fromRole === "parent" && toRole === "child") {
-      const parentIds = parentIdsByChildId.get(edge.to_entity_id) ?? new Set<string>()
-      parentIds.add(edge.from_entity_id)
-      parentIdsByChildId.set(edge.to_entity_id, parentIds)
-      continue
-    }
-
-    if (toRole === "parent" && fromRole === "child") {
-      const parentIds = parentIdsByChildId.get(edge.from_entity_id) ?? new Set<string>()
-      parentIds.add(edge.to_entity_id)
-      parentIdsByChildId.set(edge.from_entity_id, parentIds)
-    }
-  }
-
-  const childIdsByParentSignature = new Map<string, Set<string>>()
-  for (const [childId, parentIds] of parentIdsByChildId.entries()) {
-    if (parentIds.size === 0) {
-      continue
-    }
-    const signature = [...parentIds].sort().join("|")
-    const childIds = childIdsByParentSignature.get(signature) ?? new Set<string>()
-    childIds.add(childId)
-    childIdsByParentSignature.set(signature, childIds)
-  }
-
-  const groups: FamilyGroup[] = []
-  for (const signature of [...childIdsByParentSignature.keys()].sort()) {
-    const hash = createHash("sha256").update(signature).digest("hex")
-    groups.push({
-      familyNode: {
-        id: `family:${hash}`,
-        entity_kind: "family"
-      },
-      parentIds: signature.split("|"),
-      childIds: [...(childIdsByParentSignature.get(signature) ?? new Set<string>())].sort()
-    })
-  }
-
-  return groups
-}
-
 export function toFamilyViewGraph(
   graph: GraphResponse,
-  alreadyLoadedEntityIds: Set<string>,
-  alreadyLoadedRelationshipIds: Set<string>
+  _alreadyLoadedEntityIds: Set<string>,
+  _alreadyLoadedRelationshipIds: Set<string>
 ): GraphResponse {
-  const groups = deriveFamilyGroups(graph.edges)
-
-  const entities: Entity[] = [...graph.entities]
-  const remainingEdges = graph.edges.filter(
-    (edge) => !isParentChildRelationship(edge) && !isSiblingRelationship(edge)
+  const edges = graph.edges.filter(
+    (edge) =>
+      !isSiblingRelationship(edge) &&
+      normalizeRelationshipType(edge.relationship_type) !== "family_parent" &&
+      normalizeRelationshipType(edge.relationship_type) !== "family_child"
   )
-  const virtualEdges: Edge[] = []
 
-  for (const group of groups) {
-    if (!alreadyLoadedEntityIds.has(group.familyNode.id)) {
-      entities.push({
-        id: group.familyNode.id,
-        entity_kind: "family",
-        display_name: FAMILY_NODE_DISPLAY_NAME
-      })
-    }
-
-    for (const parentId of group.parentIds) {
-      const id = `family-parent:${parentId}:${group.familyNode.id}`
-      if (alreadyLoadedRelationshipIds.has(id)) {
-        continue
-      }
-      virtualEdges.push({
-        id,
-        relationship_type: "family_parent",
-        from_entity_id: parentId,
-        to_entity_id: group.familyNode.id,
-        roles: {
-          from: "parent",
-          to: "family"
-        },
-        active: true,
-        start: TIMELESS_RELATIONSHIP_START,
-        end: null
-      })
-    }
-
-    for (const childId of group.childIds) {
-      const id = `family-child:${group.familyNode.id}:${childId}`
-      if (alreadyLoadedRelationshipIds.has(id)) {
-        continue
-      }
-      virtualEdges.push({
-        id,
-        relationship_type: "family_child",
-        from_entity_id: group.familyNode.id,
-        to_entity_id: childId,
-        roles: {
-          from: "family",
-          to: "child"
-        },
-        active: true,
-        start: TIMELESS_RELATIONSHIP_START,
-        end: null
-      })
-    }
-  }
-
-  const dedupedEntities = [...new Map(entities.map((entity) => [entity.id, entity])).values()]
-  const edges = [...new Map([...remainingEdges, ...virtualEdges].map((edge) => [edge.id, edge])).values()]
+  const dedupedEntities = [...new Map(graph.entities.map((entity) => [entity.id, entity])).values()]
+  const dedupedEdges = [...new Map(edges.map((edge) => [edge.id, edge])).values()]
 
   return {
     entities: dedupedEntities,
-    edges,
+    edges: dedupedEdges,
     meta: {
       ...graph.meta,
       node_count: dedupedEntities.length,
-      edge_count: edges.length
+      edge_count: dedupedEdges.length
     }
   }
 }

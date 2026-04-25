@@ -5,10 +5,10 @@ import { useMemo } from "react"
 
 import { fetchGraphView } from "@/lib/api/graph"
 import { EMPTY_GRAPH_STATE, toGraphState } from "@/lib/api/graphState"
-import type { LayoutConfig, LayoutMode } from "@/lib/graph/layout"
+import type { LayoutConfig, LayoutMode } from "@/lib/graph/layout/types"
 import { createDefaultLayoutConfig } from "@/lib/graph/layoutConfig"
 import { computeVisibleSubgraph } from "@/lib/graph/visibility"
-import type { Edge } from "@/types"
+import type { Edge, GraphResponse } from "@/types"
 import Card from "@/components/ui/Card"
 import Stack from "@/components/ui/Stack"
 import GraphCanvas from "./GraphCanvas"
@@ -27,8 +27,28 @@ type GraphExplorerProps = {
   selectedEntityId?: string | null
   showNodeLabels?: boolean
   showRelationshipLabels?: boolean
-  onNodeSelect?: (payload: { entityId: string; familySourceEntityIds?: string[] }) => void
+  onNodeSelect?: (payload: { entityId: string }) => void
   onEdgeSelect?: (edge: Edge | null) => void
+}
+
+function normalizeRelationshipType(value: string): string {
+  return value.trim().toLowerCase().replace(/[-\s]+/g, "_")
+}
+
+function toClientFamilyViewGraph(graph: GraphResponse): GraphResponse {
+  const edges = graph.edges.filter((edge) => {
+    const relation = normalizeRelationshipType(edge.relationship_type)
+    return relation !== "sibling" && relation !== "family_parent" && relation !== "family_child"
+  })
+  return {
+    entities: graph.entities,
+    edges,
+    meta: {
+      ...graph.meta,
+      node_count: graph.entities.length,
+      edge_count: edges.length
+    }
+  }
 }
 
 export default function GraphExplorer({
@@ -62,8 +82,8 @@ export default function GraphExplorer({
       refreshKey
     ],
     enabled: activeCenterEntityId.length > 0,
-    queryFn: async () =>
-      fetchGraphView({
+    queryFn: async () => {
+      const response = await fetchGraphView({
         graph_id: graphId,
         center_entity_id: activeCenterEntityId,
         view_mode: viewMode,
@@ -79,6 +99,28 @@ export default function GraphExplorer({
           relationship_ids: []
         }
       })
+      if (viewMode !== "family" || response.entities.length > 0) {
+        return response
+      }
+
+      const graphResponse = await fetchGraphView({
+        graph_id: graphId,
+        center_entity_id: activeCenterEntityId,
+        view_mode: "graph",
+        as_of: asOf,
+        depth: fetchDepth,
+        filters: {
+          entity_types: [],
+          relationship_types: [],
+          include_inactive: includeInactive
+        },
+        already_loaded: {
+          entity_ids: [],
+          relationship_ids: []
+        }
+      })
+      return toClientFamilyViewGraph(graphResponse)
+    }
   })
 
   const baseGraph = useMemo(
@@ -117,22 +159,6 @@ export default function GraphExplorer({
         showNodeLabels={showNodeLabels}
         showRelationshipLabels={showRelationshipLabels}
         onNodeClick={(clickedEntityId) => {
-          if (clickedEntityId.startsWith("family:")) {
-            const familySourceEntityIds = new Set<string>()
-            for (const edge of visibleGraph.edges) {
-              if (edge.relationship_type === "family_parent" && edge.to_entity_id === clickedEntityId) {
-                familySourceEntityIds.add(edge.from_entity_id)
-              }
-              if (edge.relationship_type === "family_child" && edge.from_entity_id === clickedEntityId) {
-                familySourceEntityIds.add(edge.to_entity_id)
-              }
-            }
-            onNodeSelect?.({
-              entityId: clickedEntityId,
-              familySourceEntityIds: [...familySourceEntityIds].sort()
-            })
-            return
-          }
           onNodeSelect?.({ entityId: clickedEntityId })
         }}
         onEdgeClick={(clickedRelationshipId) => {

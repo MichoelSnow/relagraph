@@ -24,21 +24,21 @@ function familyEdge(
 }
 
 describe("computeNodeLevels", () => {
-  it("should_place_family_node_between_parent_and_child_levels", () => {
+  it("should_place_anchor_node_between_parent_and_child_levels", () => {
     const entities: Entity[] = [
       { id: "p1", entity_kind: "person", display_name: "Parent One" },
-      { id: "family:abc", entity_kind: "family", display_name: "Family" },
+      { id: "anchor:abc", entity_kind: "person", display_name: "Anchor" },
       { id: "c1", entity_kind: "person", display_name: "Child One" }
     ]
     const edges: Edge[] = [
-      familyEdge("e1", "family_parent", "p1", "family:abc", "parent", "family"),
-      familyEdge("e2", "family_child", "family:abc", "c1", "family", "child")
+      familyEdge("e1", "family_parent", "p1", "anchor:abc", "parent", "family"),
+      familyEdge("e2", "family_child", "anchor:abc", "c1", "family", "child")
     ]
 
     const levels = computeNodeLevels(entities, edges)
 
     expect(levels.get("p1")).toBe(0)
-    expect(levels.get("family:abc")).toBe(1)
+    expect(levels.get("anchor:abc")).toBe(1)
     expect(levels.get("c1")).toBe(2)
   })
 

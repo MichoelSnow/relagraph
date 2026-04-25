@@ -32,10 +32,6 @@ type HandleGraphProjectionOptions = {
   entityNotFoundMessage: string
 }
 
-function isVirtualFamilyEntityId(value: string): boolean {
-  return value.startsWith("family:")
-}
-
 export async function handleGraphProjectionRequest(
   options: HandleGraphProjectionOptions
 ): Promise<NextResponse> {
@@ -68,18 +64,6 @@ export async function handleGraphProjectionRequest(
   const viewMode = body.view_mode ?? "graph"
   if (viewMode !== "graph" && viewMode !== "family") {
     return jsonError(400, "invalid_request", "view_mode must be one of: graph, family")
-  }
-
-  if (isVirtualFamilyEntityId(centerEntityId)) {
-    return NextResponse.json({
-      entities: [],
-      edges: [],
-      meta: {
-        truncated: false,
-        node_count: 0,
-        edge_count: 0
-      }
-    })
   }
 
   const alreadyLoadedEntityIds = new Set(asStringArray(body.already_loaded?.entity_ids))

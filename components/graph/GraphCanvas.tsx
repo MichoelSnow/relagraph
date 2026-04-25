@@ -3,20 +3,17 @@
 import cytoscape, { type ElementDefinition } from "cytoscape"
 import { useEffect, useMemo, useRef } from "react"
 
-import {
-  applyFamilyTreeSpacingAdjustment,
-  applyIncrementalFamilyTreeLayout,
-  applyFamilyTreeMinimalMovement,
-  deriveFamilyOrderFromLayout,
-  resolveLayoutWithFallback,
-  type LayoutConfig,
-  type LayoutInput,
-  type LayoutMode as LayoutEngineMode,
-  type LayoutOutput,
-  type PreviousOrder,
-  type PreviousPositions
-} from "@/lib/graph/layout"
+import { deriveFamilyOrderFromLayout } from "@/lib/graph/layout/deriveFamilyOrder"
+import type {
+  LayoutConfig,
+  LayoutInput,
+  LayoutMode as LayoutEngineMode,
+  LayoutOutput,
+  PreviousOrder,
+  PreviousPositions
+} from "@/lib/graph/layout/types"
 import { createDefaultLayoutConfig } from "@/lib/graph/layoutConfig"
+import { layoutRegistry } from "@/lib/graph/layout/registry"
 import { classifyLayoutChange } from "@/lib/graph/layoutUpdate"
 import type { Edge, Entity } from "@/types"
 import { normalizeRelationshipTypeCode } from "@/lib/graph/relationshipType"
@@ -48,12 +45,6 @@ function colorForRelationshipType(value: string): string {
   }
   if (normalized === "sibling") {
     return "#f59e0b"
-  }
-  if (normalized === "family_parent") {
-    return "#334155"
-  }
-  if (normalized === "family_child") {
-    return "#475569"
   }
   return "#64748b"
 }
@@ -152,15 +143,6 @@ function buildCanvasStyles(
       }
     },
     {
-      selector: "node[entityKind = 'family']",
-      style: {
-        "background-color": "#64748b",
-        shape: "round-rectangle",
-        width: 44,
-        height: 28
-      }
-    },
-    {
       selector: "node",
       style: {
         label: showNodeLabels ? "data(label)" : "",
@@ -235,11 +217,6 @@ function buildCanvasStyles(
 }
 
 function resolveNodeLabel(entity: Entity): string {
-  if (entity.entity_kind === "family") {
-    const label = entity.display_name.trim()
-    return label.length > 0 ? label : "Family"
-  }
-
   return entity.display_name
 }
 
@@ -276,11 +253,17 @@ export default function GraphCanvas({
     }),
     [layoutConfig, selectedEntityId]
   )
-  const resolvedLayout = useMemo(
-    () => resolveLayoutWithFallback(layoutEngineMode, { entities, edges }, layoutConfigForEngine),
-    [layoutEngineMode, entities, edges, layoutConfigForEngine]
-  )
-  const layoutOutput = resolvedLayout.output
+  const layoutOutput = useMemo(() => {
+    const layout = layoutRegistry[layoutEngineMode]
+    return layout({
+      entities,
+      edges,
+      focusNodeId: selectedEntityId ?? undefined,
+      previousPositions: previousPositionsRef.current,
+      previousOrder: previousOrderRef.current,
+      layoutConfig: layoutConfigForEngine
+    })
+  }, [layoutEngineMode, entities, edges, selectedEntityId, layoutConfigForEngine])
   const layoutEdgeById = useMemo(
     () => new Map(layoutOutput.edges.map((edge) => [edge.id, edge])),
     [layoutOutput.edges]
@@ -548,53 +531,9 @@ export default function GraphCanvas({
       cy.autoungrabify(true)
       if (topologyChanged || modeChanged || layoutEngineChanged || layoutConfigChanged) {
         const input: LayoutInput = { entities, edges }
-        const computedOutput =
-          layoutEngineMode === "family_tree" &&
-          layoutConfigChanged &&
-          !topologyChanged &&
-          !modeChanged &&
-          !layoutEngineChanged
-            ? applyFamilyTreeSpacingAdjustment(
-                input,
-                layoutOutput,
-                previousPositionsRef.current,
-                previousOrderRef.current,
-                previousLayoutConfigRef.current,
-                layoutConfig
-              )
-            : layoutEngineMode === "family_tree" && topologyChanged && changeType !== "global_change"
-              ? applyIncrementalFamilyTreeLayout(input, {
-                baseOutput: layoutOutput,
-                previousPositions: previousPositionsRef.current,
-                previousOrder: previousOrderRef.current,
-                previousInput,
-                changeType: changeType === "local_remove" ? "local_remove" : "local_add",
-                addedNodeIds,
-                removedNodeIds,
-                addedEdgeIds,
-                removedEdgeIds,
-                config: layoutConfigForEngine
-              }).output
-            : layoutEngineMode === "family_tree" && topologyChanged
-              ? applyFamilyTreeMinimalMovement(input, layoutOutput, previousPositionsRef.current, layoutConfigForEngine)
-              : layoutOutput
-        const outputToApply =
-          topologyChanged && !modeChanged && !layoutEngineChanged && !layoutConfigChanged
-            ? {
-                ...computedOutput,
-                nodes: computedOutput.nodes.map((node) => {
-                  const previous = previousPositionsRef.current[node.id]
-                  if (!previous) {
-                    return node
-                  }
-                  return {
-                    id: node.id,
-                    x: previous.x,
-                    y: previous.y
-                  }
-                })
-              }
-            : computedOutput
+        const outputToApply = layoutOutput
+        const requiresViewportReset =
+          previousTopologyKeyRef.current === "" || modeChanged || layoutEngineChanged
 
         const nextPositions = Object.fromEntries(
           outputToApply.nodes.map((node) => [node.id, { x: node.x, y: node.y }])
@@ -618,10 +557,13 @@ export default function GraphCanvas({
             : undefined
 
         applyLayoutOutput(cy, outputToApply, {
-          animate: !layoutConfigChanged,
+          animate: !layoutConfigChanged && !requiresViewportReset,
           durationMs: changeType === "global_change" ? 260 : 190,
           newNodeInitialPositions
         })
+        if (requiresViewportReset && cy.nodes().length > 0) {
+          cy.fit(cy.nodes(), 24)
+        }
         previousPositionsRef.current = nextPositions
         previousOrderRef.current = nextOrder
       }
