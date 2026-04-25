@@ -16,6 +16,7 @@ import {
   updateRelationship
 } from "@/lib/api/graphs"
 import type { LayoutMode } from "@/lib/graph/layout"
+import { DEFAULT_HORIZONTAL_SPACING, DEFAULT_VERTICAL_SPACING } from "@/lib/graph/layoutConfig"
 import { cx } from "@/lib/ui/cx"
 import type { Edge } from "@/types"
 import GraphExplorer from "@/components/graph/GraphExplorer"
@@ -85,8 +86,6 @@ const RIGHT_PANEL_KEY = "relagraph:workspace:right-panel-expanded"
 const PANEL_STORAGE_EVENT = "relagraph:panel-storage"
 const TEMPORAL_SIMPLE_MODE = true
 const DEFAULT_RELATIONSHIP_START = "1900-01-01T00:00:00.000Z"
-const DEFAULT_HORIZONTAL_SPACING = 180
-const DEFAULT_VERTICAL_SPACING = 180
 const NAME_TYPE_OPTIONS = ["legal", "birth", "chosen", "nickname", "maiden", "alias", "religious"] as const
 const NAME_LANGUAGE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "", label: "Unspecified" },

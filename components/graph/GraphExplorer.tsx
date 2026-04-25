@@ -6,6 +6,8 @@ import { useMemo } from "react"
 import { fetchGraphView } from "@/lib/api/graph"
 import { EMPTY_GRAPH_STATE, toGraphState } from "@/lib/api/graphState"
 import type { LayoutConfig, LayoutMode } from "@/lib/graph/layout"
+import { createDefaultLayoutConfig } from "@/lib/graph/layoutConfig"
+import { computeVisibleSubgraph } from "@/lib/graph/visibility"
 import type { Edge } from "@/types"
 import Card from "@/components/ui/Card"
 import Stack from "@/components/ui/Stack"
@@ -38,7 +40,7 @@ export default function GraphExplorer({
   depth = 3,
   layoutMode = "auto",
   layoutEngineMode = "graph",
-  layoutConfig = { horizontalSpacing: 180, verticalSpacing: 180 },
+  layoutConfig = createDefaultLayoutConfig(),
   refreshKey = 0,
   selectedEntityId = null,
   showNodeLabels = false,
@@ -47,6 +49,7 @@ export default function GraphExplorer({
   onEdgeSelect
 }: GraphExplorerProps) {
   const activeCenterEntityId = entityId
+  const fetchDepth = 4
 
   const viewQuery = useQuery({
     queryKey: [
@@ -55,7 +58,6 @@ export default function GraphExplorer({
       activeCenterEntityId,
       viewMode,
       asOf,
-      depth,
       includeInactive,
       refreshKey
     ],
@@ -66,7 +68,7 @@ export default function GraphExplorer({
         center_entity_id: activeCenterEntityId,
         view_mode: viewMode,
         as_of: asOf,
-        depth,
+        depth: fetchDepth,
         filters: {
           entity_types: [],
           relationship_types: [],
@@ -83,15 +85,31 @@ export default function GraphExplorer({
     () => (viewQuery.data ? toGraphState(viewQuery.data) : EMPTY_GRAPH_STATE),
     [viewQuery.data]
   )
-  const entities = useMemo(() => Object.values(baseGraph.entities), [baseGraph.entities])
-  const edges = useMemo(() => Object.values(baseGraph.edges), [baseGraph.edges])
+  const allEntities = useMemo(() => Object.values(baseGraph.entities), [baseGraph.entities])
+  const allEdges = useMemo(() => Object.values(baseGraph.edges), [baseGraph.edges])
+  const focusedNodeId = useMemo(() => {
+    if (selectedEntityId && baseGraph.entities[selectedEntityId]) {
+      return selectedEntityId
+    }
+    return activeCenterEntityId
+  }, [selectedEntityId, baseGraph.entities, activeCenterEntityId])
+  const visibleGraph = useMemo(
+    () =>
+      computeVisibleSubgraph({
+        entities: allEntities,
+        edges: allEdges,
+        focusedNodeId,
+        distance: depth
+      }),
+    [allEntities, allEdges, focusedNodeId, depth]
+  )
   const errorMessage = (viewQuery.error as Error | null)?.message ?? null
 
   return (
     <Stack className="relative h-full min-h-[520px] gap-0">
       <GraphCanvas
-        entities={entities}
-        edges={edges}
+        entities={visibleGraph.entities}
+        edges={visibleGraph.edges}
         layoutMode={layoutMode}
         layoutEngineMode={layoutEngineMode}
         layoutConfig={layoutConfig}
@@ -101,7 +119,7 @@ export default function GraphExplorer({
         onNodeClick={(clickedEntityId) => {
           if (clickedEntityId.startsWith("family:")) {
             const familySourceEntityIds = new Set<string>()
-            for (const edge of Object.values(baseGraph.edges)) {
+            for (const edge of visibleGraph.edges) {
               if (edge.relationship_type === "family_parent" && edge.to_entity_id === clickedEntityId) {
                 familySourceEntityIds.add(edge.from_entity_id)
               }
@@ -118,7 +136,8 @@ export default function GraphExplorer({
           onNodeSelect?.({ entityId: clickedEntityId })
         }}
         onEdgeClick={(clickedRelationshipId) => {
-          onEdgeSelect?.(baseGraph.edges[clickedRelationshipId] ?? null)
+          const selectedEdge = visibleGraph.edges.find((edge) => edge.id === clickedRelationshipId) ?? null
+          onEdgeSelect?.(selectedEdge)
         }}
       />
       {errorMessage ? (

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  applyFamilyTreeSpacingAdjustment,
   applyIncrementalFamilyTreeLayout,
+  applyFamilyTreeMinimalMovement,
   deriveFamilyOrderFromLayout,
   layouts,
   resolveLayoutWithFallback
@@ -782,5 +784,518 @@ describe("layout engines", () => {
     expect(Math.abs((byId.get("f2")?.x ?? 0) - (previousPositions.f2?.x ?? 0))).toBeLessThan(1e-6)
     expect(Math.abs((byId.get("b1")?.x ?? 0) - (previousPositions.b1?.x ?? 0))).toBeLessThan(1e-6)
     expect((byId.get("a3")?.x ?? 0) > (byId.get("a2")?.x ?? 0)).toBe(true)
+  })
+
+  it("should_keep_family_nodes_parent_anchored_in_minimal_movement_output", () => {
+    const entities: Entity[] = [
+      { id: "p1", entity_kind: "person", display_name: "Parent A" },
+      { id: "p2", entity_kind: "person", display_name: "Parent B" },
+      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "c1", entity_kind: "person", display_name: "Child 1" },
+      { id: "c2", entity_kind: "person", display_name: "Child 2" }
+    ]
+    const edges: Edge[] = [
+      {
+        id: "e1",
+        relationship_type: "family_parent",
+        from_entity_id: "p1",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e2",
+        relationship_type: "family_parent",
+        from_entity_id: "p2",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e3",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "c1",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e4",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "c2",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      }
+    ]
+
+    const spacing = { horizontalSpacing: 100, verticalSpacing: 80 }
+    const base = layouts.family_tree({ entities, edges }, spacing)
+    const previousPositions = Object.fromEntries(base.nodes.map((node) => [node.id, { x: node.x, y: node.y }]))
+    const moved = applyFamilyTreeMinimalMovement({ entities, edges }, base, previousPositions, spacing)
+    const byId = new Map(moved.nodes.map((node) => [node.id, node]))
+    const parentMidpoint = ((byId.get("p1")?.x ?? 0) + (byId.get("p2")?.x ?? 0)) / 2
+
+    expect(Math.abs((byId.get("f1")?.x ?? 0) - parentMidpoint)).toBeLessThan(1e-6)
+  })
+
+  it("should_produce_finite_positions_for_global_change_minimal_movement_path", () => {
+    const entities: Entity[] = [
+      { id: "p1", entity_kind: "person", display_name: "Parent A" },
+      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "c1", entity_kind: "person", display_name: "Child 1" }
+    ]
+    const edges: Edge[] = [
+      {
+        id: "e1",
+        relationship_type: "family_parent",
+        from_entity_id: "p1",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e2",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "c1",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      }
+    ]
+
+    const spacing = { horizontalSpacing: 120, verticalSpacing: 90 }
+    const previous = layouts.family_tree({ entities, edges }, spacing)
+    const previousPositions = Object.fromEntries(previous.nodes.map((node) => [node.id, { x: node.x, y: node.y }]))
+
+    const next = layouts.family_tree(
+      {
+        entities: [...entities, { id: "c2", entity_kind: "person", display_name: "Child 2" }],
+        edges: [
+          ...edges,
+          {
+            id: "e3",
+            relationship_type: "family_child",
+            from_entity_id: "f1",
+            to_entity_id: "c2",
+            roles: { from: "family", to: "child" },
+            active: true,
+            start: "2026-01-01T00:00:00.000Z",
+            end: null
+          }
+        ]
+      },
+      spacing
+    )
+    const stabilized = applyFamilyTreeMinimalMovement(
+      {
+        entities: [...entities, { id: "c2", entity_kind: "person", display_name: "Child 2" }],
+        edges: [
+          ...edges,
+          {
+            id: "e3",
+            relationship_type: "family_child",
+            from_entity_id: "f1",
+            to_entity_id: "c2",
+            roles: { from: "family", to: "child" },
+            active: true,
+            start: "2026-01-01T00:00:00.000Z",
+            end: null
+          }
+        ]
+      },
+      next,
+      previousPositions,
+      spacing
+    )
+
+    for (const node of stabilized.nodes) {
+      expect(Number.isFinite(node.x)).toBe(true)
+      expect(Number.isFinite(node.y)).toBe(true)
+    }
+  })
+
+  it("should_keep_animal_dependent_centered_under_owners_in_incremental_layout", () => {
+    const entities: Entity[] = [
+      { id: "p1", entity_kind: "person", display_name: "Owner A" },
+      { id: "p2", entity_kind: "person", display_name: "Owner B" },
+      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "c1", entity_kind: "person", display_name: "Child 1" },
+      { id: "pet1", entity_kind: "animal", display_name: "Pet 1" }
+    ]
+    const edges: Edge[] = [
+      {
+        id: "e1",
+        relationship_type: "family_parent",
+        from_entity_id: "p1",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e2",
+        relationship_type: "family_parent",
+        from_entity_id: "p2",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e3",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "c1",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e4",
+        relationship_type: "animal",
+        from_entity_id: "p1",
+        to_entity_id: "pet1",
+        roles: { from: "owner", to: "pet" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e5",
+        relationship_type: "animal",
+        from_entity_id: "p2",
+        to_entity_id: "pet1",
+        roles: { from: "owner", to: "pet" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      }
+    ]
+
+    const spacing = { horizontalSpacing: 110, verticalSpacing: 80 }
+    const previousOutput = layouts.family_tree({ entities, edges }, spacing)
+    const previousPositions = Object.fromEntries(previousOutput.nodes.map((node) => [node.id, { x: node.x, y: node.y }]))
+    const previousOrder = deriveFamilyOrderFromLayout({ entities, edges }, previousOutput)
+
+    const nextEntities: Entity[] = [...entities, { id: "c2", entity_kind: "person", display_name: "Child 2" }]
+    const nextEdges: Edge[] = [
+      ...edges,
+      {
+        id: "e6",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "c2",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      }
+    ]
+    const baseNextOutput = layouts.family_tree({ entities: nextEntities, edges: nextEdges }, spacing)
+    const incremental = applyIncrementalFamilyTreeLayout(
+      { entities: nextEntities, edges: nextEdges },
+      {
+        baseOutput: baseNextOutput,
+        previousPositions,
+        previousOrder,
+        previousInput: { entities, edges },
+        changeType: "local_add",
+        addedNodeIds: ["c2"],
+        removedNodeIds: [],
+        addedEdgeIds: ["e6"],
+        removedEdgeIds: [],
+        config: spacing
+      }
+    )
+    const byId = new Map(incremental.output.nodes.map((node) => [node.id, node]))
+    const ownerMidpoint = ((byId.get("p1")?.x ?? 0) + (byId.get("p2")?.x ?? 0)) / 2
+    expect(Math.abs((byId.get("pet1")?.x ?? 0) - ownerMidpoint)).toBeLessThan(1e-6)
+  })
+
+  it("should_keep_animal_dependent_centered_under_owners_in_minimal_movement_layout", () => {
+    const entities: Entity[] = [
+      { id: "p1", entity_kind: "person", display_name: "Owner A" },
+      { id: "p2", entity_kind: "person", display_name: "Owner B" },
+      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "pet1", entity_kind: "animal", display_name: "Pet 1" }
+    ]
+    const edges: Edge[] = [
+      {
+        id: "e1",
+        relationship_type: "family_parent",
+        from_entity_id: "p1",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e2",
+        relationship_type: "family_parent",
+        from_entity_id: "p2",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e3",
+        relationship_type: "animal",
+        from_entity_id: "p1",
+        to_entity_id: "pet1",
+        roles: { from: "owner", to: "pet" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e4",
+        relationship_type: "animal",
+        from_entity_id: "p2",
+        to_entity_id: "pet1",
+        roles: { from: "owner", to: "pet" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      }
+    ]
+
+    const spacing = { horizontalSpacing: 120, verticalSpacing: 90 }
+    const output = layouts.family_tree({ entities, edges }, spacing)
+    const previousPositions = Object.fromEntries(output.nodes.map((node) => [node.id, { x: node.x, y: node.y }]))
+    const moved = applyFamilyTreeMinimalMovement({ entities, edges }, output, previousPositions, spacing)
+    const byId = new Map(moved.nodes.map((node) => [node.id, node]))
+    const ownerMidpoint = ((byId.get("p1")?.x ?? 0) + (byId.get("p2")?.x ?? 0)) / 2
+    expect(Math.abs((byId.get("pet1")?.x ?? 0) - ownerMidpoint)).toBeLessThan(1e-6)
+  })
+
+  it("should_preserve_relative_order_on_family_tree_spacing_change", () => {
+    const entities: Entity[] = [
+      { id: "p1", entity_kind: "person", display_name: "Parent A" },
+      { id: "p2", entity_kind: "person", display_name: "Parent B" },
+      { id: "f1", entity_kind: "family", display_name: "Family" },
+      { id: "c1", entity_kind: "person", display_name: "Child 1" },
+      { id: "c2", entity_kind: "person", display_name: "Child 2" },
+      { id: "pet1", entity_kind: "animal", display_name: "Pet" }
+    ]
+    const edges: Edge[] = [
+      {
+        id: "e1",
+        relationship_type: "family_parent",
+        from_entity_id: "p1",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e2",
+        relationship_type: "family_parent",
+        from_entity_id: "p2",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e3",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "c1",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e4",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "c2",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e5",
+        relationship_type: "animal",
+        from_entity_id: "p1",
+        to_entity_id: "pet1",
+        roles: { from: "owner", to: "pet" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e6",
+        relationship_type: "animal",
+        from_entity_id: "p2",
+        to_entity_id: "pet1",
+        roles: { from: "owner", to: "pet" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      }
+    ]
+
+    const previousConfig = { horizontalSpacing: 120, verticalSpacing: 90 }
+    const nextConfig = { horizontalSpacing: 220, verticalSpacing: 90 }
+    const previousOutput = layouts.family_tree({ entities, edges }, previousConfig)
+    const previousPositions = Object.fromEntries(previousOutput.nodes.map((node) => [node.id, { x: node.x, y: node.y }]))
+    const previousOrder = deriveFamilyOrderFromLayout({ entities, edges }, previousOutput)
+    const nextBaseOutput = layouts.family_tree({ entities, edges }, nextConfig)
+
+    const adjusted = applyFamilyTreeSpacingAdjustment(
+      { entities, edges },
+      nextBaseOutput,
+      previousPositions,
+      previousOrder,
+      previousConfig,
+      nextConfig
+    )
+    const byId = new Map(adjusted.nodes.map((node) => [node.id, node]))
+    const parentMidpoint = ((byId.get("p1")?.x ?? 0) + (byId.get("p2")?.x ?? 0)) / 2
+    const familyChildren = (previousOrder.f1 ?? []).filter((id) => id === "c1" || id === "c2")
+    const orderedChildren = [...familyChildren].sort((leftId, rightId) => {
+      const leftX = byId.get(leftId)?.x ?? 0
+      const rightX = byId.get(rightId)?.x ?? 0
+      if (leftX !== rightX) {
+        return leftX - rightX
+      }
+      return leftId.localeCompare(rightId, "en")
+    })
+
+    expect(orderedChildren).toEqual(familyChildren)
+    expect(Math.abs((byId.get("f1")?.x ?? 0) - parentMidpoint)).toBeLessThan(1e-6)
+    expect(Math.abs((byId.get("pet1")?.x ?? 0) - parentMidpoint)).toBeLessThan(1e-6)
+  })
+
+  it("should_keep_focus_siblings_ordered_and_place_external_partner_adjacent", () => {
+    const entities: Entity[] = [
+      { id: "p1", entity_kind: "person", display_name: "Parent A" },
+      { id: "p2", entity_kind: "person", display_name: "Parent B" },
+      { id: "f1", entity_kind: "family", display_name: "Family 1" },
+      { id: "a", entity_kind: "person", display_name: "A" },
+      { id: "b", entity_kind: "person", display_name: "B" },
+      { id: "c", entity_kind: "person", display_name: "C" },
+      { id: "q1", entity_kind: "person", display_name: "Parent Q" },
+      { id: "f2", entity_kind: "family", display_name: "Family 2" },
+      { id: "x", entity_kind: "person", display_name: "X" }
+    ]
+    const edges: Edge[] = [
+      {
+        id: "e1",
+        relationship_type: "family_parent",
+        from_entity_id: "p1",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e2",
+        relationship_type: "family_parent",
+        from_entity_id: "p2",
+        to_entity_id: "f1",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e3",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "a",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e4",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "b",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e5",
+        relationship_type: "family_child",
+        from_entity_id: "f1",
+        to_entity_id: "c",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e6",
+        relationship_type: "family_parent",
+        from_entity_id: "q1",
+        to_entity_id: "f2",
+        roles: { from: "parent", to: "family" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e7",
+        relationship_type: "family_child",
+        from_entity_id: "f2",
+        to_entity_id: "x",
+        roles: { from: "family", to: "child" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      },
+      {
+        id: "e8",
+        relationship_type: "romantic",
+        from_entity_id: "b",
+        to_entity_id: "x",
+        roles: { from: "partner", to: "partner" },
+        active: true,
+        start: "2026-01-01T00:00:00.000Z",
+        end: null
+      }
+    ]
+
+    const spacing = { horizontalSpacing: 100, verticalSpacing: 80, focusNodeId: "b" }
+    const output = layouts.family_tree({ entities, edges }, spacing)
+    const byId = new Map(output.nodes.map((node) => [node.id, node]))
+    const ax = byId.get("a")?.x ?? 0
+    const bx = byId.get("b")?.x ?? 0
+    const cx = byId.get("c")?.x ?? 0
+    const xx = byId.get("x")?.x ?? 0
+
+    expect(ax < bx).toBe(true)
+    expect(bx < cx).toBe(true)
+    expect(Math.abs(Math.abs(xx - bx) - spacing.horizontalSpacing)).toBeLessThan(1e-6)
   })
 })

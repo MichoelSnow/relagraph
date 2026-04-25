@@ -4,10 +4,10 @@ import cytoscape, { type ElementDefinition } from "cytoscape"
 import { useEffect, useMemo, useRef } from "react"
 
 import {
+  applyFamilyTreeSpacingAdjustment,
   applyIncrementalFamilyTreeLayout,
   applyFamilyTreeMinimalMovement,
   deriveFamilyOrderFromLayout,
-  type LayoutChangeType,
   resolveLayoutWithFallback,
   type LayoutConfig,
   type LayoutInput,
@@ -16,6 +16,8 @@ import {
   type PreviousOrder,
   type PreviousPositions
 } from "@/lib/graph/layout"
+import { createDefaultLayoutConfig } from "@/lib/graph/layoutConfig"
+import { classifyLayoutChange } from "@/lib/graph/layoutUpdate"
 import type { Edge, Entity } from "@/types"
 import { normalizeRelationshipTypeCode } from "@/lib/graph/relationshipType"
 import { graphTheme, resolveGraphTheme, type ResolvedGraphTheme } from "@/lib/ui/graphTheme"
@@ -93,9 +95,15 @@ function applyLayoutOutput(
     }
     node.stop()
     const initial = newNodeInitialPositions[positionedNode.id]
+    const defaultWidth = Number.parseFloat(String(node.style("width")))
+    const defaultHeight = Number.parseFloat(String(node.style("height")))
+    const targetWidth = Number.isFinite(defaultWidth) ? defaultWidth : 26
+    const targetHeight = Number.isFinite(defaultHeight) ? defaultHeight : 26
     if (initial) {
       node.position({ x: initial.x, y: initial.y })
       node.style("opacity", 0.2)
+      node.style("width", Math.max(8, targetWidth * 0.8))
+      node.style("height", Math.max(8, targetHeight * 0.8))
     }
     node.animate(
       {
@@ -105,7 +113,9 @@ function applyLayoutOutput(
         },
         style: initial
           ? {
-              opacity: 1
+              opacity: 1,
+              width: targetWidth,
+              height: targetHeight
             }
           : undefined
       },
@@ -238,7 +248,7 @@ export default function GraphCanvas({
   edges,
   layoutMode = "auto",
   layoutEngineMode = "graph",
-  layoutConfig = { horizontalSpacing: 180, verticalSpacing: 180 },
+  layoutConfig = createDefaultLayoutConfig(),
   selectedEntityId,
   showNodeLabels = true,
   showRelationshipLabels = false,
@@ -252,20 +262,32 @@ export default function GraphCanvas({
   const previousLayoutModeRef = useRef<"auto" | "manual">(layoutMode)
   const previousLayoutEngineModeRef = useRef<LayoutEngineMode>(layoutEngineMode)
   const previousLayoutConfigKeyRef = useRef(`${layoutConfig.horizontalSpacing}|${layoutConfig.verticalSpacing}`)
+  const previousLayoutConfigRef = useRef<LayoutConfig>(layoutConfig)
   const previousPositionsRef = useRef<PreviousPositions>({})
   const previousOrderRef = useRef<PreviousOrder>({})
   const previousInputRef = useRef<LayoutInput>({ entities: [], edges: [] })
 
   const onNodeClickRef = useRef(onNodeClick)
   const onEdgeClickRef = useRef(onEdgeClick)
+  const layoutConfigForEngine = useMemo(
+    () => ({
+      ...layoutConfig,
+      focusNodeId: selectedEntityId ?? null
+    }),
+    [layoutConfig, selectedEntityId]
+  )
   const resolvedLayout = useMemo(
-    () => resolveLayoutWithFallback(layoutEngineMode, { entities, edges }, layoutConfig),
-    [layoutEngineMode, entities, edges, layoutConfig]
+    () => resolveLayoutWithFallback(layoutEngineMode, { entities, edges }, layoutConfigForEngine),
+    [layoutEngineMode, entities, edges, layoutConfigForEngine]
   )
   const layoutOutput = resolvedLayout.output
   const layoutEdgeById = useMemo(
     () => new Map(layoutOutput.edges.map((edge) => [edge.id, edge])),
     [layoutOutput.edges]
+  )
+  const layoutNodeById = useMemo(
+    () => new Map(layoutOutput.nodes.map((node) => [node.id, node])),
+    [layoutOutput.nodes]
   )
 
   useEffect(() => {
@@ -277,14 +299,23 @@ export default function GraphCanvas({
   }, [onEdgeClick])
 
   const elements = useMemo<ElementDefinition[]>(() => {
-    const nodeElements: ElementDefinition[] = entities.map((entity) => ({
-      data: {
-        id: entity.id,
-        label: resolveNodeLabel(entity),
-        entityKind: entity.entity_kind,
-        isSelected: entity.id === selectedEntityId ? "true" : "false"
+    const nodeElements: ElementDefinition[] = entities.map((entity) => {
+      const positionedNode = layoutNodeById.get(entity.id)
+      return {
+        data: {
+          id: entity.id,
+          label: resolveNodeLabel(entity),
+          entityKind: entity.entity_kind,
+          isSelected: entity.id === selectedEntityId ? "true" : "false"
+        },
+        position: positionedNode
+          ? {
+              x: positionedNode.x,
+              y: positionedNode.y
+            }
+          : undefined
       }
-    }))
+    })
 
     const edgeElements: ElementDefinition[] = edges.map((edge) => {
       const layoutEdge = layoutEdgeById.get(edge.id)
@@ -314,7 +345,7 @@ export default function GraphCanvas({
     })
 
     return [...nodeElements, ...edgeElements]
-  }, [entities, edges, selectedEntityId, layoutEdgeById])
+  }, [entities, edges, selectedEntityId, layoutEdgeById, layoutNodeById])
 
   const topologyKey = useMemo(() => {
     const nodeIds = [...entities.map((entity) => entity.id)].sort().join(",")
@@ -396,14 +427,14 @@ export default function GraphCanvas({
     }
 
     const nextElementById = new Map(elements.map((element) => [String(element.data?.id ?? ""), element]))
+    const removalDurationMs = 180
+    const exitingElementIds = cy
+      .elements()
+      .toArray()
+      .map((element) => element.id())
+      .filter((id) => !nextElementById.has(id))
 
     cy.batch(() => {
-      for (const existingElement of cy.elements().toArray()) {
-        if (!nextElementById.has(existingElement.id())) {
-          existingElement.remove()
-        }
-      }
-
       const nodeElements = elements.filter((element) => {
         const data = element.data as Record<string, unknown> | undefined
         return data ? !("source" in data) : false
@@ -421,6 +452,8 @@ export default function GraphCanvas({
 
         const existing = cy.getElementById(elementId)
         if (existing.length > 0) {
+          existing.stop()
+          existing.style("opacity", 1)
           existing.data(element.data ?? {})
         } else {
           cy.add(element)
@@ -451,12 +484,47 @@ export default function GraphCanvas({
 
         const existing = cy.getElementById(elementId)
         if (existing.length > 0) {
+          existing.stop()
+          existing.style("opacity", 1)
           existing.data(edgeData)
         } else {
-          cy.add(element)
+          const added = cy.add(element)
+          added.style("opacity", 0)
+          added.animate(
+            {
+              style: { opacity: 1 }
+            },
+            {
+              duration: removalDurationMs,
+              easing: "ease-in-out"
+            }
+          )
         }
       }
     })
+
+    for (const exitingId of exitingElementIds) {
+      const element = cy.getElementById(exitingId)
+      if (element.length === 0) {
+        continue
+      }
+      element.stop()
+      element.animate(
+        {
+          style: { opacity: 0 }
+        },
+        {
+          duration: removalDurationMs,
+          easing: "ease-in-out",
+          complete: () => {
+            const latest = cy.getElementById(exitingId)
+            if (latest.length > 0 && !nextElementById.has(exitingId)) {
+              latest.remove()
+            }
+          }
+        }
+      )
+    }
 
     const topologyChanged = previousTopologyKeyRef.current !== topologyKey
     const modeChanged = previousLayoutModeRef.current !== layoutMode
@@ -465,47 +533,37 @@ export default function GraphCanvas({
     const layoutConfigChanged = previousLayoutConfigKeyRef.current !== layoutConfigKey
 
     const previousInput = previousInputRef.current
-    const previousNodeIds = new Set(previousInput.entities.map((entity) => entity.id))
-    const currentNodeIds = new Set(entities.map((entity) => entity.id))
-    const previousEdgeIds = new Set(previousInput.edges.map((edge) => edge.id))
-    const currentEdgeIds = new Set(edges.map((edge) => edge.id))
-    const sharedNodeCount = [...currentNodeIds].filter((id) => previousNodeIds.has(id)).length
-    const nodeUnionCount = new Set([...previousNodeIds, ...currentNodeIds]).size
-    const sharedRatio = nodeUnionCount === 0 ? 1 : sharedNodeCount / nodeUnionCount
-    const addedNodeIds = [...currentNodeIds].filter((id) => !previousNodeIds.has(id))
-    const removedNodeIds = [...previousNodeIds].filter((id) => !currentNodeIds.has(id))
-    const addedEdgeIds = [...currentEdgeIds].filter((id) => !previousEdgeIds.has(id))
-    const removedEdgeIds = [...previousEdgeIds].filter((id) => !currentEdgeIds.has(id))
-
-    let changeType: LayoutChangeType = "selection_only"
-    if (!topologyChanged) {
-      changeType = "selection_only"
-    } else if (modeChanged || layoutEngineChanged || layoutConfigChanged) {
-      changeType = "global_change"
-    } else {
-      const localCandidate =
-        sharedRatio >= 0.75 &&
-        addedNodeIds.length + removedNodeIds.length + addedEdgeIds.length + removedEdgeIds.length <= 12
-      if (localCandidate) {
-        if (addedNodeIds.length + addedEdgeIds.length > 0 && removedNodeIds.length + removedEdgeIds.length === 0) {
-          changeType = "local_add"
-        } else if (removedNodeIds.length + removedEdgeIds.length > 0 && addedNodeIds.length + addedEdgeIds.length === 0) {
-          changeType = "local_remove"
-        } else {
-          changeType = "global_change"
-        }
-      } else {
-        changeType = "global_change"
-      }
-    }
+    const { changeType, addedNodeIds, removedNodeIds, addedEdgeIds, removedEdgeIds } = classifyLayoutChange({
+      previousEntities: previousInput.entities,
+      previousEdges: previousInput.edges,
+      entities,
+      edges,
+      topologyChanged,
+      modeChanged,
+      layoutEngineChanged,
+      layoutConfigChanged
+    })
 
     if (layoutMode === "auto") {
       cy.autoungrabify(true)
       if (topologyChanged || modeChanged || layoutEngineChanged || layoutConfigChanged) {
         const input: LayoutInput = { entities, edges }
-        const outputToApply =
-          layoutEngineMode === "family_tree" && topologyChanged && changeType !== "global_change"
-            ? applyIncrementalFamilyTreeLayout(input, {
+        const computedOutput =
+          layoutEngineMode === "family_tree" &&
+          layoutConfigChanged &&
+          !topologyChanged &&
+          !modeChanged &&
+          !layoutEngineChanged
+            ? applyFamilyTreeSpacingAdjustment(
+                input,
+                layoutOutput,
+                previousPositionsRef.current,
+                previousOrderRef.current,
+                previousLayoutConfigRef.current,
+                layoutConfig
+              )
+            : layoutEngineMode === "family_tree" && topologyChanged && changeType !== "global_change"
+              ? applyIncrementalFamilyTreeLayout(input, {
                 baseOutput: layoutOutput,
                 previousPositions: previousPositionsRef.current,
                 previousOrder: previousOrderRef.current,
@@ -515,11 +573,28 @@ export default function GraphCanvas({
                 removedNodeIds,
                 addedEdgeIds,
                 removedEdgeIds,
-                config: layoutConfig
+                config: layoutConfigForEngine
               }).output
             : layoutEngineMode === "family_tree" && topologyChanged
-              ? applyFamilyTreeMinimalMovement(input, layoutOutput, previousPositionsRef.current, layoutConfig)
+              ? applyFamilyTreeMinimalMovement(input, layoutOutput, previousPositionsRef.current, layoutConfigForEngine)
               : layoutOutput
+        const outputToApply =
+          topologyChanged && !modeChanged && !layoutEngineChanged && !layoutConfigChanged
+            ? {
+                ...computedOutput,
+                nodes: computedOutput.nodes.map((node) => {
+                  const previous = previousPositionsRef.current[node.id]
+                  if (!previous) {
+                    return node
+                  }
+                  return {
+                    id: node.id,
+                    x: previous.x,
+                    y: previous.y
+                  }
+                })
+              }
+            : computedOutput
 
         const nextPositions = Object.fromEntries(
           outputToApply.nodes.map((node) => [node.id, { x: node.x, y: node.y }])
@@ -563,8 +638,9 @@ export default function GraphCanvas({
     previousLayoutModeRef.current = layoutMode
     previousLayoutEngineModeRef.current = layoutEngineMode
     previousLayoutConfigKeyRef.current = layoutConfigKey
+    previousLayoutConfigRef.current = layoutConfig
     previousInputRef.current = { entities, edges }
-  }, [elements, topologyKey, layoutOutput, layoutMode, layoutEngineMode, layoutConfig, entities, edges])
+  }, [elements, topologyKey, layoutOutput, layoutMode, layoutEngineMode, layoutConfig, layoutConfigForEngine, entities, edges])
 
   return (
     <div ref={canvasShellRef} className="relative h-[68vh] min-h-[520px] w-full overflow-hidden rounded-xl border border-[var(--graph-canvas-border)]">

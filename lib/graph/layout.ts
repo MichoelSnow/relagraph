@@ -1,4 +1,5 @@
 import { computeNodeLevels } from "@/lib/graph/layoutLevels"
+import { DEFAULT_HORIZONTAL_SPACING, DEFAULT_VERTICAL_SPACING } from "@/lib/graph/layoutConfig"
 import type { Edge, Entity } from "@/types"
 
 export type LayoutInput = {
@@ -21,6 +22,7 @@ export type LayoutChangeType = "selection_only" | "local_add" | "local_remove" |
 export type LayoutConfig = {
   horizontalSpacing: number
   verticalSpacing: number
+  focusNodeId?: string | null
 }
 
 export type ResolvedLayout = {
@@ -33,8 +35,8 @@ export type ResolvedLayout = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type LayoutEngine = (input: LayoutInput, config?: any) => LayoutOutput
 
-const VERTICAL_SPACING = 180
-const HORIZONTAL_SPACING = 180
+const VERTICAL_SPACING = DEFAULT_VERTICAL_SPACING
+const HORIZONTAL_SPACING = DEFAULT_HORIZONTAL_SPACING
 const MAX_PARENTS_PER_FAMILY = 4
 const MAX_FAMILY_LAYOUT_CROSSINGS = 12
 
@@ -44,6 +46,161 @@ function normalizeRelationshipType(value: string): string {
 
 function normalizeRole(value: string): string {
   return value.trim().toLowerCase().replace(/[-\s]+/g, "_")
+}
+
+function collectRomanticPartnerIdsByEntityId(edges: Edge[]): Map<string, Set<string>> {
+  const partnerIdsByEntityId = new Map<string, Set<string>>()
+  for (const edge of edges) {
+    if (normalizeRelationshipType(edge.relationship_type) !== "romantic") {
+      continue
+    }
+    if (!partnerIdsByEntityId.has(edge.from_entity_id)) {
+      partnerIdsByEntityId.set(edge.from_entity_id, new Set<string>())
+    }
+    if (!partnerIdsByEntityId.has(edge.to_entity_id)) {
+      partnerIdsByEntityId.set(edge.to_entity_id, new Set<string>())
+    }
+    partnerIdsByEntityId.get(edge.from_entity_id)?.add(edge.to_entity_id)
+    partnerIdsByEntityId.get(edge.to_entity_id)?.add(edge.from_entity_id)
+  }
+  return partnerIdsByEntityId
+}
+
+function resolvePrimaryFamilyId(
+  focusNodeId: string | null | undefined,
+  entitiesById: Map<string, Entity>,
+  familyParentIdsByFamilyId: Map<string, Set<string>> | Map<string, string[]>,
+  parentByDependentId: Map<string, string>
+): string | null {
+  if (!focusNodeId || !entitiesById.has(focusNodeId)) {
+    return null
+  }
+  if (entitiesById.get(focusNodeId)?.entity_kind === "family") {
+    return focusNodeId
+  }
+  const dependentParentId = parentByDependentId.get(focusNodeId)
+  if (dependentParentId && entitiesById.get(dependentParentId)?.entity_kind === "family") {
+    return dependentParentId
+  }
+
+  for (const [familyId, parentIds] of familyParentIdsByFamilyId) {
+    const asArray = Array.isArray(parentIds) ? parentIds : [...parentIds]
+    if (asArray.includes(focusNodeId)) {
+      return familyId
+    }
+  }
+
+  return null
+}
+
+function buildPrimaryFamilyVisualOrder(
+  primaryFamilyId: string | null,
+  dependentsByParentId: Map<string, string[]>,
+  partnerIdsByEntityId: Map<string, Set<string>>,
+  entitiesById: Map<string, Entity>,
+  compareIds: (leftId: string, rightId: string) => number
+): string[] | null {
+  if (!primaryFamilyId) {
+    return null
+  }
+  const baseDependents = dependentsByParentId.get(primaryFamilyId) ?? []
+  if (baseDependents.length === 0) {
+    return null
+  }
+  const primarySet = new Set(baseDependents)
+  const visualOrder = [...baseDependents]
+
+  const insertAdjacent = (anchorId: string, partnerId: string) => {
+    const anchorIndex = visualOrder.indexOf(anchorId)
+    if (anchorIndex === -1) {
+      return
+    }
+    const existingIndex = visualOrder.indexOf(partnerId)
+    if (existingIndex !== -1) {
+      if (Math.abs(existingIndex - anchorIndex) <= 1) {
+        return
+      }
+      visualOrder.splice(existingIndex, 1)
+      const updatedAnchorIndex = visualOrder.indexOf(anchorId)
+      visualOrder.splice(updatedAnchorIndex + 1, 0, partnerId)
+      return
+    }
+    visualOrder.splice(anchorIndex + 1, 0, partnerId)
+  }
+
+  for (const dependentId of baseDependents) {
+    const partners = [...(partnerIdsByEntityId.get(dependentId) ?? new Set<string>())]
+      .filter((partnerId) => entitiesById.has(partnerId))
+      .sort(compareIds)
+    for (const partnerId of partners) {
+      if (primarySet.has(partnerId)) {
+        continue
+      }
+      insertAdjacent(dependentId, partnerId)
+    }
+  }
+
+  return visualOrder
+}
+
+function enforceRomanticAdjacency(
+  partnerIdsByEntityId: Map<string, Set<string>>,
+  xById: Map<string, number>,
+  levels: Map<string, number>,
+  shiftSubtree: (nodeId: string, deltaX: number) => void,
+  options?: {
+    protectedIds?: Set<string>
+  }
+) {
+  const protectedIds = options?.protectedIds ?? new Set<string>()
+  const processedPairs = new Set<string>()
+  for (const [leftId, partnerIds] of partnerIdsByEntityId) {
+    for (const rightId of partnerIds) {
+      const pairKey = leftId < rightId ? `${leftId}|${rightId}` : `${rightId}|${leftId}`
+      if (processedPairs.has(pairKey)) {
+        continue
+      }
+      processedPairs.add(pairKey)
+
+      const leftX = xById.get(leftId)
+      const rightX = xById.get(rightId)
+      if (leftX === undefined || rightX === undefined) {
+        continue
+      }
+      const leftLevel = levels.get(leftId)
+      const rightLevel = levels.get(rightId)
+      if (leftLevel === undefined || rightLevel === undefined || leftLevel !== rightLevel) {
+        continue
+      }
+      const delta = rightX - leftX
+      if (Math.abs(Math.abs(delta) - 1) < 1e-6) {
+        continue
+      }
+
+      const leftProtected = protectedIds.has(leftId)
+      const rightProtected = protectedIds.has(rightId)
+      if (leftProtected && rightProtected) {
+        continue
+      }
+      if (leftProtected) {
+        const targetRightX = leftX + (delta >= 0 ? 1 : -1)
+        shiftSubtree(rightId, targetRightX - rightX)
+        continue
+      }
+      if (rightProtected) {
+        const targetLeftX = rightX - (delta >= 0 ? 1 : -1)
+        shiftSubtree(leftId, targetLeftX - leftX)
+        continue
+      }
+
+      if (Math.abs(delta) < 1e-6) {
+        shiftSubtree(rightId, 1)
+        continue
+      }
+      const targetRightX = leftX + (delta > 0 ? 1 : -1)
+      shiftSubtree(rightId, targetRightX - rightX)
+    }
+  }
 }
 
 function ownerSetSignature(ownerIds: Iterable<string>): string {
@@ -79,6 +236,24 @@ function resolvePetOwnerAndDependent(edge: Edge, entitiesById: Map<string, Entit
   }
 
   return null
+}
+
+function collectPetOwnerIdsByDependentId(
+  edges: Edge[],
+  entitiesById: Map<string, Entity>
+): Map<string, Set<string>> {
+  const ownerIdsByDependentId = new Map<string, Set<string>>()
+  for (const edge of edges) {
+    const relation = resolvePetOwnerAndDependent(edge, entitiesById)
+    if (!relation) {
+      continue
+    }
+    if (!ownerIdsByDependentId.has(relation.dependentId)) {
+      ownerIdsByDependentId.set(relation.dependentId, new Set<string>())
+    }
+    ownerIdsByDependentId.get(relation.dependentId)?.add(relation.ownerId)
+  }
+  return ownerIdsByDependentId
 }
 
 function resolveParentAndDependent(edge: Edge, entitiesById: Map<string, Entity>): { parentId: string; dependentId: string } | null {
@@ -243,6 +418,7 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
   const familyParentIdsByFamilyId = new Map<string, Set<string>>()
   const familyDependentIdsByFamilyId = new Map<string, Set<string>>()
   const romanticNeighborIdsByEntityId = new Map<string, Set<string>>()
+  const romanticPartnerIdsByEntityId = collectRomanticPartnerIdsByEntityId(edges)
   const petOwnerIdsByDependentId = new Map<string, Set<string>>()
   const dependentsByParentId = new Map<string, string[]>()
   const parentByDependentId = new Map<string, string>()
@@ -481,6 +657,25 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
     dependentsByParentId.set(parentId, sortedDependentIds)
   }
 
+  const primaryFamilyId = resolvePrimaryFamilyId(
+    config?.focusNodeId ?? null,
+    entitiesById,
+    familyParentIdsByFamilyId,
+    parentByDependentId
+  )
+  const primaryFamilyVisualOrder = buildPrimaryFamilyVisualOrder(
+    primaryFamilyId,
+    dependentsByParentId,
+    romanticPartnerIdsByEntityId,
+    entitiesById,
+    (leftId, rightId) => compareEntityIdsByStableOrder(leftId, rightId, entitiesById, birthTimestampById)
+  )
+  const visualDependentsByParentId = new Map(dependentsByParentId)
+  if (primaryFamilyId && primaryFamilyVisualOrder) {
+    visualDependentsByParentId.set(primaryFamilyId, primaryFamilyVisualOrder)
+  }
+  const primarySiblingSet = new Set<string>(dependentsByParentId.get(primaryFamilyId ?? "") ?? [])
+
   const idsByLevel = new Map<number, string[]>()
   const romanticMemberIds = new Set<string>()
   for (const romanticComponent of romanticComponents.values()) {
@@ -620,31 +815,6 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
     }
   }
 
-  const sortedFamilyIds = [...familyParentIdsByFamilyId.keys()].sort(
-    (leftId, rightId) => {
-      const levelCompare = (levels.get(leftId) ?? 0) - (levels.get(rightId) ?? 0)
-      if (levelCompare !== 0) {
-        return levelCompare
-      }
-      return compareEntityIdsByStableOrder(leftId, rightId, entitiesById, birthTimestampById)
-    }
-  )
-  for (const familyId of sortedFamilyIds) {
-    const parentIds = familyParentIdsByFamilyId.get(familyId)
-    if (!parentIds || parentIds.size === 0) {
-      continue
-    }
-    const parentXs = [...parentIds]
-      .map((parentId) => xById.get(parentId))
-      .filter((value): value is number => value !== undefined)
-    if (parentXs.length === 0) {
-      continue
-    }
-    const targetFamilyX = parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length
-    const currentFamilyX = xById.get(familyId) ?? targetFamilyX
-    shiftSubtree(familyId, targetFamilyX - currentFamilyX)
-  }
-
   for (const component of romanticComponents.values()) {
     if (component.length <= 1) {
       continue
@@ -667,6 +837,63 @@ export const familyTreeLayout: LayoutEngine = (input, config) => {
       shiftSubtree(memberId, targetMemberX - currentMemberX)
     }
   }
+
+  // Family nodes are parent-anchored by definition: their x-position is always
+  // the midpoint of all linked parents. Children/pets then adapt around family.x.
+  const sortedFamilyIds = [...familyParentIdsByFamilyId.keys()].sort(
+    (leftId, rightId) => {
+      const levelCompare = (levels.get(leftId) ?? 0) - (levels.get(rightId) ?? 0)
+      if (levelCompare !== 0) {
+        return levelCompare
+      }
+      return compareEntityIdsByStableOrder(leftId, rightId, entitiesById, birthTimestampById)
+    }
+  )
+  for (const familyId of sortedFamilyIds) {
+    const parentIds = familyParentIdsByFamilyId.get(familyId)
+    if (!parentIds || parentIds.size === 0) {
+      continue
+    }
+    const parentXs = [...parentIds]
+      .map((parentId) => xById.get(parentId))
+      .filter((value): value is number => value !== undefined)
+    if (parentXs.length === 0) {
+      continue
+    }
+
+    const anchoredFamilyX = parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length
+    xById.set(familyId, anchoredFamilyX)
+
+    const dependentIds = visualDependentsByParentId.get(familyId) ?? []
+    if (dependentIds.length === 0) {
+      continue
+    }
+
+    const startX = anchoredFamilyX - (dependentIds.length - 1) / 2
+    for (let index = 0; index < dependentIds.length; index += 1) {
+      const dependentId = dependentIds[index]
+      const targetDependentX = startX + index
+      const currentDependentX = xById.get(dependentId) ?? targetDependentX
+      shiftSubtree(dependentId, targetDependentX - currentDependentX)
+    }
+  }
+
+  // Keep animal dependents directly below their owner/family anchor.
+  for (const [dependentId, ownerIds] of petOwnerIdsByDependentId) {
+    const ownerXs = [...ownerIds]
+      .map((ownerId) => xById.get(ownerId))
+      .filter((value): value is number => value !== undefined)
+    if (ownerXs.length === 0) {
+      continue
+    }
+    const anchoredDependentX = ownerXs.reduce((sum, value) => sum + value, 0) / ownerXs.length
+    const currentDependentX = xById.get(dependentId) ?? anchoredDependentX
+    shiftSubtree(dependentId, anchoredDependentX - currentDependentX)
+  }
+
+  enforceRomanticAdjacency(romanticPartnerIdsByEntityId, xById, levels, shiftSubtree, {
+    protectedIds: primarySiblingSet
+  })
 
   const positionedNodes = entities.map((entity) => ({
     id: entity.id,
@@ -822,6 +1049,12 @@ type IncrementalFamilyLayoutResult = {
   affectedNodeIds: string[]
 }
 
+type FamilyTreeStructure = {
+  dependentsByParentId: Map<string, string[]>
+  parentIdsByFamilyId: Map<string, string[]>
+  petOwnerIdsByDependentId: Map<string, Set<string>>
+}
+
 function mergeOrderPreservingExisting(
   existingOrder: string[] | undefined,
   nextIds: string[],
@@ -859,6 +1092,132 @@ function mergeOrderPreservingExisting(
   return merged
 }
 
+function collectFamilyTreeStructure(input: LayoutInput): FamilyTreeStructure {
+  const entitiesById = new Map(input.entities.map((entity) => [entity.id, entity]))
+  const dependentsByParentId = new Map<string, string[]>()
+  const parentIdsByFamilyId = new Map<string, string[]>()
+  const petOwnerIdsByDependentId = collectPetOwnerIdsByDependentId(input.edges, entitiesById)
+
+  for (const edge of input.edges) {
+    if (normalizeRelationshipType(edge.relationship_type) === "family_parent") {
+      const parentIds = parentIdsByFamilyId.get(edge.to_entity_id) ?? []
+      if (!parentIds.includes(edge.from_entity_id)) {
+        parentIds.push(edge.from_entity_id)
+      }
+      parentIdsByFamilyId.set(edge.to_entity_id, parentIds)
+    }
+
+    const relation = resolveParentAndDependent(edge, entitiesById)
+    if (!relation) {
+      continue
+    }
+    const existingDependents = dependentsByParentId.get(relation.parentId) ?? []
+    if (!existingDependents.includes(relation.dependentId)) {
+      existingDependents.push(relation.dependentId)
+      dependentsByParentId.set(relation.parentId, existingDependents)
+    }
+  }
+
+  return {
+    dependentsByParentId,
+    parentIdsByFamilyId,
+    petOwnerIdsByDependentId
+  }
+}
+
+export function applyFamilyTreeSpacingAdjustment(
+  input: LayoutInput,
+  baseOutput: LayoutOutput,
+  previousPositions: PreviousPositions,
+  previousOrder: PreviousOrder,
+  previousConfig: LayoutConfig,
+  nextConfig: LayoutConfig
+): LayoutOutput {
+  const previousSpacing = resolveSpacingConfig(previousConfig)
+  const nextSpacing = resolveSpacingConfig(nextConfig)
+  const ratioX = nextSpacing.horizontalSpacing / previousSpacing.horizontalSpacing
+  const ratioY = nextSpacing.verticalSpacing / previousSpacing.verticalSpacing
+  const { dependentsByParentId, parentIdsByFamilyId, petOwnerIdsByDependentId } = collectFamilyTreeStructure(input)
+  const currentNodeIds = new Set(input.entities.map((entity) => entity.id))
+  const baseXById = new Map(baseOutput.nodes.map((node) => [node.id, node.x]))
+  const baseNodeById = new Map(baseOutput.nodes.map((node) => [node.id, node]))
+
+  const anchorNodes = baseOutput.nodes.filter((node) => previousPositions[node.id] || baseXById.has(node.id))
+  const centroid = anchorNodes.reduce(
+    (acc, node) => {
+      const previous = previousPositions[node.id]
+      const x = previous?.x ?? node.x
+      const y = previous?.y ?? node.y
+      return { x: acc.x + x, y: acc.y + y }
+    },
+    { x: 0, y: 0 }
+  )
+  const centroidX = anchorNodes.length > 0 ? centroid.x / anchorNodes.length : 0
+  const centroidY = anchorNodes.length > 0 ? centroid.y / anchorNodes.length : 0
+
+  const nextXById = new Map<string, number>()
+  const nextYById = new Map<string, number>()
+  for (const node of baseOutput.nodes) {
+    const previous = previousPositions[node.id]
+    const originX = previous?.x ?? node.x
+    const originY = previous?.y ?? node.y
+    nextXById.set(node.id, centroidX + (originX - centroidX) * ratioX)
+    nextYById.set(node.id, centroidY + (originY - centroidY) * ratioY)
+  }
+
+  const nextOrder = deriveFamilyOrderFromLayout(input, baseOutput)
+  for (const [parentId, dependentIds] of dependentsByParentId) {
+    nextOrder[parentId] = mergeOrderPreservingExisting(previousOrder[parentId], dependentIds, baseXById)
+  }
+
+  for (const [familyId, parentIds] of parentIdsByFamilyId) {
+    const parentXs = parentIds
+      .map((parentId) => nextXById.get(parentId))
+      .filter((value): value is number => value !== undefined)
+    if (parentXs.length === 0) {
+      continue
+    }
+    const anchoredFamilyX = parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length
+    nextXById.set(familyId, anchoredFamilyX)
+
+    const orderedDependents = nextOrder[familyId] ?? []
+    if (orderedDependents.length === 0) {
+      continue
+    }
+    const startX = anchoredFamilyX - ((orderedDependents.length - 1) / 2) * nextSpacing.horizontalSpacing
+    for (let index = 0; index < orderedDependents.length; index += 1) {
+      const dependentId = orderedDependents[index]
+      if (!currentNodeIds.has(dependentId)) {
+        continue
+      }
+      nextXById.set(dependentId, startX + index * nextSpacing.horizontalSpacing)
+    }
+  }
+
+  for (const [dependentId, ownerIds] of petOwnerIdsByDependentId) {
+    if (!currentNodeIds.has(dependentId)) {
+      continue
+    }
+    const ownerXs = [...ownerIds]
+      .map((ownerId) => nextXById.get(ownerId))
+      .filter((value): value is number => value !== undefined)
+    if (ownerXs.length === 0) {
+      continue
+    }
+    const anchoredX = ownerXs.reduce((sum, value) => sum + value, 0) / ownerXs.length
+    nextXById.set(dependentId, anchoredX)
+  }
+
+  return {
+    nodes: baseOutput.nodes.map((node) => ({
+      id: node.id,
+      x: nextXById.get(node.id) ?? baseNodeById.get(node.id)?.x ?? node.x,
+      y: nextYById.get(node.id) ?? baseNodeById.get(node.id)?.y ?? node.y
+    })),
+    edges: baseOutput.edges
+  }
+}
+
 export function applyIncrementalFamilyTreeLayout(
   input: LayoutInput,
   params: IncrementalFamilyLayoutInput
@@ -871,24 +1230,15 @@ export function applyIncrementalFamilyTreeLayout(
   const baseNodeById = new Map(baseOutput.nodes.map((node) => [node.id, node]))
   const baseXById = new Map(baseOutput.nodes.map((node) => [node.id, node.x]))
   const currentNodeIds = new Set(input.entities.map((entity) => entity.id))
+  const romanticPartnerIdsByEntityId = collectRomanticPartnerIdsByEntityId(input.edges)
 
-  const dependentsByParentId = new Map<string, string[]>()
+  const structure = collectFamilyTreeStructure(input)
+  const { dependentsByParentId, parentIdsByFamilyId, petOwnerIdsByDependentId } = structure
   const parentIdsByDependentId = new Map<string, string[]>()
-  const parentIdsByFamilyId = new Map<string, string[]>()
   for (const edge of input.edges) {
-    if (normalizeRelationshipType(edge.relationship_type) === "family_parent") {
-      const parentIds = parentIdsByFamilyId.get(edge.to_entity_id) ?? []
-      parentIds.push(edge.from_entity_id)
-      parentIdsByFamilyId.set(edge.to_entity_id, parentIds)
-    }
     const relation = resolveParentAndDependent(edge, entitiesById)
     if (!relation) {
       continue
-    }
-    const existingDependents = dependentsByParentId.get(relation.parentId) ?? []
-    if (!existingDependents.includes(relation.dependentId)) {
-      existingDependents.push(relation.dependentId)
-      dependentsByParentId.set(relation.parentId, existingDependents)
     }
     const existingParents = parentIdsByDependentId.get(relation.dependentId) ?? []
     if (!existingParents.includes(relation.parentId)) {
@@ -978,6 +1328,38 @@ export function applyIncrementalFamilyTreeLayout(
     const preserved = mergeOrderPreservingExisting(previousOrder[parentId], dependents, baseXById)
     nextOrder[parentId] = preserved
   }
+  const parentByDependentId = new Map<string, string>()
+  for (const [parentId, dependentIds] of dependentsByParentId) {
+    for (const dependentId of dependentIds) {
+      if (!parentByDependentId.has(dependentId)) {
+        parentByDependentId.set(dependentId, parentId)
+      }
+    }
+  }
+  const primaryFamilyId = resolvePrimaryFamilyId(
+    config?.focusNodeId ?? null,
+    entitiesById,
+    parentIdsByFamilyId,
+    parentByDependentId
+  )
+  const primarySiblingSet = new Set<string>(dependentsByParentId.get(primaryFamilyId ?? "") ?? [])
+  const primaryFamilyVisualOrder = buildPrimaryFamilyVisualOrder(
+    primaryFamilyId,
+    dependentsByParentId,
+    romanticPartnerIdsByEntityId,
+    entitiesById,
+    (leftId, rightId) => {
+      const leftX = baseXById.get(leftId) ?? Number.MAX_SAFE_INTEGER
+      const rightX = baseXById.get(rightId) ?? Number.MAX_SAFE_INTEGER
+      if (leftX !== rightX) {
+        return leftX - rightX
+      }
+      return leftId.localeCompare(rightId, "en")
+    }
+  )
+  if (primaryFamilyId && primaryFamilyVisualOrder) {
+    nextOrder[primaryFamilyId] = primaryFamilyVisualOrder
+  }
 
   for (const parentId of affectedParentIds) {
     const orderedDependents = nextOrder[parentId] ?? []
@@ -998,6 +1380,27 @@ export function applyIncrementalFamilyTreeLayout(
     }
   }
 
+  const collectSubtreeIds = (nodeId: string, bucket: Set<string>) => {
+    if (bucket.has(nodeId)) {
+      return
+    }
+    bucket.add(nodeId)
+    const childIds = dependentsByParentId.get(nodeId) ?? []
+    for (const childId of childIds) {
+      collectSubtreeIds(childId, bucket)
+    }
+  }
+  const shiftSubtree = (nodeId: string, deltaX: number) => {
+    if (deltaX === 0) {
+      return
+    }
+    const subtreeIds = new Set<string>()
+    collectSubtreeIds(nodeId, subtreeIds)
+    for (const subtreeId of subtreeIds) {
+      nextXById.set(subtreeId, (nextXById.get(subtreeId) ?? 0) + deltaX)
+    }
+  }
+
   for (const [familyId, parentIds] of parentIdsByFamilyId) {
     if (parentIds.length === 0 || !nextXById.has(familyId)) {
       continue
@@ -1009,9 +1412,26 @@ export function applyIncrementalFamilyTreeLayout(
       continue
     }
     const anchoredX = parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length
-    const currentX = nextXById.get(familyId) ?? anchoredX
-    const maxShift = previousPositions[familyId] ? localShiftCap : horizontalSpacing
-    nextXById.set(familyId, currentX + clamp(anchoredX - currentX, -maxShift, maxShift))
+    nextXById.set(familyId, anchoredX)
+  }
+
+  for (const familyId of Object.keys(nextOrder).filter((id) => id.startsWith("family:"))) {
+    const orderedDependents = nextOrder[familyId] ?? []
+    if (orderedDependents.length === 0 || !nextXById.has(familyId)) {
+      continue
+    }
+    const familyX = nextXById.get(familyId) ?? 0
+    const startX = familyX - ((orderedDependents.length - 1) / 2) * horizontalSpacing
+    for (let index = 0; index < orderedDependents.length; index += 1) {
+      const dependentId = orderedDependents[index]
+      if (!currentNodeIds.has(dependentId)) {
+        continue
+      }
+      const targetX = startX + index * horizontalSpacing
+      const currentX = nextXById.get(dependentId) ?? targetX
+      const maxShift = previousPositions[dependentId] ? localShiftCap : horizontalSpacing
+      nextXById.set(dependentId, currentX + clamp(targetX - currentX, -maxShift, maxShift))
+    }
   }
 
   const levelById = new Map(
@@ -1035,12 +1455,59 @@ export function applyIncrementalFamilyTreeLayout(
       if (delta >= minGap) {
         continue
       }
+      if ((entitiesById.get(rightId)?.entity_kind ?? "person") === "family") {
+        continue
+      }
       if (!affectedNodeIds.has(rightId)) {
         continue
       }
       nextXById.set(rightId, leftX + minGap)
     }
   }
+
+  // Final hard anchor pass: family.x is always parent midpoint, and children
+  // are centered around family.x (children adapt to family, never inverse).
+  for (const [familyId, parentIds] of parentIdsByFamilyId) {
+    const parentXs = parentIds
+      .map((parentId) => nextXById.get(parentId))
+      .filter((value): value is number => value !== undefined)
+    if (parentXs.length === 0) {
+      continue
+    }
+    const anchoredFamilyX = parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length
+    nextXById.set(familyId, anchoredFamilyX)
+
+    const orderedDependents = nextOrder[familyId] ?? []
+    if (orderedDependents.length === 0) {
+      continue
+    }
+    const startX = anchoredFamilyX - ((orderedDependents.length - 1) / 2) * horizontalSpacing
+    for (let index = 0; index < orderedDependents.length; index += 1) {
+      const dependentId = orderedDependents[index]
+      if (!currentNodeIds.has(dependentId)) {
+        continue
+      }
+      nextXById.set(dependentId, startX + index * horizontalSpacing)
+    }
+  }
+
+  for (const [dependentId, ownerIds] of petOwnerIdsByDependentId) {
+    if (!currentNodeIds.has(dependentId)) {
+      continue
+    }
+    const ownerXs = [...ownerIds]
+      .map((ownerId) => nextXById.get(ownerId))
+      .filter((value): value is number => value !== undefined)
+    if (ownerXs.length === 0) {
+      continue
+    }
+    const anchoredX = ownerXs.reduce((sum, value) => sum + value, 0) / ownerXs.length
+    nextXById.set(dependentId, anchoredX)
+  }
+
+  enforceRomanticAdjacency(romanticPartnerIdsByEntityId, nextXById, levelById, shiftSubtree, {
+    protectedIds: primarySiblingSet
+  })
 
   const nodes = baseOutput.nodes.map((node) => ({
     id: node.id,
@@ -1073,6 +1540,44 @@ export function applyFamilyTreeMinimalMovement(
 
   const nodesById = new Map(baseOutput.nodes.map((node) => [node.id, node]))
   const entitiesById = new Map(input.entities.map((entity) => [entity.id, entity]))
+  const currentNodeIds = new Set(input.entities.map((entity) => entity.id))
+  const romanticPartnerIdsByEntityId = collectRomanticPartnerIdsByEntityId(input.edges)
+  const { dependentsByParentId, parentIdsByFamilyId, petOwnerIdsByDependentId } = collectFamilyTreeStructure(input)
+  const parentByDependentId = new Map<string, string>()
+  for (const [parentId, dependentIds] of dependentsByParentId) {
+    for (const dependentId of dependentIds) {
+      if (!parentByDependentId.has(dependentId)) {
+        parentByDependentId.set(dependentId, parentId)
+      }
+    }
+  }
+  const primaryFamilyId = resolvePrimaryFamilyId(
+    config?.focusNodeId ?? null,
+    entitiesById,
+    parentIdsByFamilyId,
+    parentByDependentId
+  )
+  const primarySiblingSet = new Set<string>(dependentsByParentId.get(primaryFamilyId ?? "") ?? [])
+  const primaryFamilyVisualOrder = buildPrimaryFamilyVisualOrder(
+    primaryFamilyId,
+    dependentsByParentId,
+    romanticPartnerIdsByEntityId,
+    entitiesById,
+    (leftId, rightId) => {
+      const leftNode = nodesById.get(leftId)
+      const rightNode = nodesById.get(rightId)
+      const leftX = leftNode?.x ?? Number.MAX_SAFE_INTEGER
+      const rightX = rightNode?.x ?? Number.MAX_SAFE_INTEGER
+      if (leftX !== rightX) {
+        return leftX - rightX
+      }
+      return leftId.localeCompare(rightId, "en")
+    }
+  )
+  const visualDependentsByParentId = new Map(dependentsByParentId)
+  if (primaryFamilyId && primaryFamilyVisualOrder) {
+    visualDependentsByParentId.set(primaryFamilyId, primaryFamilyVisualOrder)
+  }
 
   const xById = new Map<string, number>()
   const yById = new Map<string, number>()
@@ -1107,18 +1612,31 @@ export function applyFamilyTreeMinimalMovement(
     neighborIdsById.get(leftId)?.add(rightId)
   }
 
-  const parentIdsByFamilyId = new Map<string, string[]>()
   for (const edge of input.edges) {
     registerNeighbor(edge.from_entity_id, edge.to_entity_id)
     registerNeighbor(edge.to_entity_id, edge.from_entity_id)
-    if (normalizeRelationshipType(edge.relationship_type) === "family_parent") {
-      const parentIds = parentIdsByFamilyId.get(edge.to_entity_id) ?? []
-      parentIds.push(edge.from_entity_id)
-      parentIdsByFamilyId.set(edge.to_entity_id, parentIds)
-    }
   }
 
-  const isExisting = (id: string): boolean => previousPositions[id] !== undefined
+  const collectSubtreeIds = (nodeId: string, bucket: Set<string>) => {
+    if (bucket.has(nodeId)) {
+      return
+    }
+    bucket.add(nodeId)
+    const childIds = dependentsByParentId.get(nodeId) ?? []
+    for (const childId of childIds) {
+      collectSubtreeIds(childId, bucket)
+    }
+  }
+  const shiftSubtree = (nodeId: string, deltaX: number) => {
+    if (deltaX === 0) {
+      return
+    }
+    const subtreeIds = new Set<string>()
+    collectSubtreeIds(nodeId, subtreeIds)
+    for (const subtreeId of subtreeIds) {
+      xById.set(subtreeId, (xById.get(subtreeId) ?? 0) + deltaX)
+    }
+  }
 
   const resolveTargetX = (id: string): number => {
     const baseX = nodesById.get(id)?.x ?? 0
@@ -1158,9 +1676,19 @@ export function applyFamilyTreeMinimalMovement(
         cursorX = targetX
         continue
       }
-      const nextX = Math.max(targetX, cursorX + minGap)
-      xById.set(id, nextX)
-      cursorX = nextX
+      const minimumX: number = cursorX + minGap
+      if (targetX >= minimumX) {
+        xById.set(id, targetX)
+        cursorX = targetX
+        continue
+      }
+      if (entitiesById.get(id)?.entity_kind === "family") {
+        // Family anchors are immutable; never push them due to level packing.
+        xById.set(id, targetX)
+        continue
+      }
+      xById.set(id, minimumX)
+      cursorX = minimumX
     }
 
     for (const id of sortedIds) {
@@ -1181,9 +1709,20 @@ export function applyFamilyTreeMinimalMovement(
       continue
     }
     const anchoredX = parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length
-    const currentX = xById.get(familyId) ?? anchoredX
-    const maxShift = isExisting(familyId) ? maxExistingShiftX : horizontalSpacing
-    xById.set(familyId, currentX + clamp(anchoredX - currentX, -maxShift, maxShift))
+    xById.set(familyId, anchoredX)
+
+    const dependentIds = visualDependentsByParentId.get(familyId) ?? []
+    if (dependentIds.length === 0) {
+      continue
+    }
+    const startX = anchoredX - ((dependentIds.length - 1) / 2) * horizontalSpacing
+    for (let index = 0; index < dependentIds.length; index += 1) {
+      const dependentId = dependentIds[index]
+      const targetX = startX + index * horizontalSpacing
+      const currentX = xById.get(dependentId) ?? targetX
+      const maxShift = previousPositions[dependentId] ? maxExistingShiftX : horizontalSpacing
+      xById.set(dependentId, currentX + clamp(targetX - currentX, -maxShift, maxShift))
+    }
   }
 
   for (const [, sortedIds] of idsByLevel) {
@@ -1195,14 +1734,26 @@ export function applyFamilyTreeMinimalMovement(
         xById.set(id, candidate)
         continue
       }
-      const nextX = Math.max(candidate, cursorX + minGap)
-      xById.set(id, nextX)
-      cursorX = nextX
+      const minimumX: number = cursorX + minGap
+      if (candidate >= minimumX) {
+        xById.set(id, candidate)
+        cursorX = candidate
+        continue
+      }
+      if (entitiesById.get(id)?.entity_kind === "family") {
+        xById.set(id, candidate)
+        continue
+      }
+      xById.set(id, minimumX)
+      cursorX = minimumX
     }
 
     // Compact locally on removal without global recentering.
     for (let index = sortedIds.length - 2; index >= 0; index -= 1) {
       const id = sortedIds[index]
+      if (entitiesById.get(id)?.entity_kind === "family") {
+        continue
+      }
       const nextId = sortedIds[index + 1]
       const currentX = xById.get(id) ?? 0
       const nextX = xById.get(nextId) ?? currentX + minGap
@@ -1212,6 +1763,46 @@ export function applyFamilyTreeMinimalMovement(
       }
     }
   }
+
+  // Final hard anchor pass to prevent any residual drift.
+  for (const [familyId, parentIds] of parentIdsByFamilyId) {
+    const parentXs = parentIds
+      .map((parentId) => xById.get(parentId))
+      .filter((value): value is number => value !== undefined)
+    if (parentXs.length === 0) {
+      continue
+    }
+    const anchoredX = parentXs.reduce((sum, value) => sum + value, 0) / parentXs.length
+    xById.set(familyId, anchoredX)
+
+    const dependentIds = visualDependentsByParentId.get(familyId) ?? []
+    if (dependentIds.length === 0) {
+      continue
+    }
+    const startX = anchoredX - ((dependentIds.length - 1) / 2) * horizontalSpacing
+    for (let index = 0; index < dependentIds.length; index += 1) {
+      const dependentId = dependentIds[index]
+      xById.set(dependentId, startX + index * horizontalSpacing)
+    }
+  }
+
+  for (const [dependentId, ownerIds] of petOwnerIdsByDependentId) {
+    if (!currentNodeIds.has(dependentId)) {
+      continue
+    }
+    const ownerXs = [...ownerIds]
+      .map((ownerId) => xById.get(ownerId))
+      .filter((value): value is number => value !== undefined)
+    if (ownerXs.length === 0) {
+      continue
+    }
+    const anchoredX = ownerXs.reduce((sum, value) => sum + value, 0) / ownerXs.length
+    xById.set(dependentId, anchoredX)
+  }
+
+  enforceRomanticAdjacency(romanticPartnerIdsByEntityId, xById, levelById, shiftSubtree, {
+    protectedIds: primarySiblingSet
+  })
 
   const nodes = baseOutput.nodes.map((node) => {
     const entityKind = entitiesById.get(node.id)?.entity_kind
