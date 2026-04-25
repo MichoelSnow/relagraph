@@ -163,7 +163,6 @@ function buildPrimaryFamilyVisualOrder(
 
 function existingAssignOrderLogic(
   entities: Entity[],
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   edges: Edge[],
   structure: FamilyTreeStructure | undefined,
   constrained: FamilyTreeConstraints | undefined,

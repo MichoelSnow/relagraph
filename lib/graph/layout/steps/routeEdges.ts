@@ -22,7 +22,6 @@ type OrderedFamilyData = {
 }
 
 function existingRouteEdgesLogic(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   entities: Entity[],
   edges: Edge[],
   layout: FamilyLayoutLike | undefined,

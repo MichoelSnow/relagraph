@@ -148,9 +148,7 @@ function resolveRelationshipEdge(
 }
 
 export function toFamilyViewGraph(
-  graph: GraphResponse,
-  _alreadyLoadedEntityIds: Set<string>,
-  _alreadyLoadedRelationshipIds: Set<string>
+  graph: GraphResponse
 ): GraphResponse {
   const edges = graph.edges.filter(
     (edge) =>

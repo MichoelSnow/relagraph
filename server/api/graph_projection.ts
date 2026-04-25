@@ -93,7 +93,7 @@ export async function handleGraphProjectionRequest(
 
   const responseGraph =
     viewMode === "family"
-      ? toFamilyViewGraph(graph, alreadyLoadedEntityIds, alreadyLoadedRelationshipIds)
+      ? toFamilyViewGraph(graph)
       : graph
 
   return NextResponse.json(responseGraph)

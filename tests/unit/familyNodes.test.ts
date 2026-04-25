@@ -31,7 +31,7 @@ describe("toFamilyViewGraph", () => {
       meta: { truncated: false, node_count: 3, edge_count: 2 }
     }
 
-    const transformed = toFamilyViewGraph(baseGraph, new Set(), new Set())
+    const transformed = toFamilyViewGraph(baseGraph)
     expect(transformed.entities).toEqual(baseGraph.entities)
     expect(transformed.edges).toEqual(baseGraph.edges)
     expect(transformed.meta.node_count).toBe(3)
@@ -73,7 +73,7 @@ describe("toFamilyViewGraph", () => {
       meta: { truncated: false, node_count: 4, edge_count: 4 }
     }
 
-    const transformed = toFamilyViewGraph(baseGraph, new Set(), new Set())
+    const transformed = toFamilyViewGraph(baseGraph)
 
     expect(transformed.edges.some((edge) => edge.relationship_type === "parent_child")).toBe(true)
     expect(transformed.edges.some((edge) => edge.relationship_type === "sibling")).toBe(false)
@@ -112,7 +112,7 @@ describe("toFamilyViewGraph", () => {
       meta: { truncated: false, node_count: 2, edge_count: 3 }
     }
 
-    const transformed = toFamilyViewGraph(baseGraph, new Set(), new Set())
+    const transformed = toFamilyViewGraph(baseGraph)
     expect(transformed.edges.map((edge) => edge.id)).toEqual(["r3"])
     expect(transformed.meta.edge_count).toBe(1)
   })

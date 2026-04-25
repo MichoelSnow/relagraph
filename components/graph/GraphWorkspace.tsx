@@ -338,7 +338,7 @@ export default function GraphWorkspace({ graphId, graphName, initialAsOf }: Grap
   const [edgeEnd, setEdgeEnd] = useState("")
 
   const [editAction, setEditAction] = useState<EditAction>("edit_node")
-  const [sourceNodeId, setSourceNodeId] = useState<string | null>(null)
+  const [, setSourceNodeId] = useState<string | null>(null)
   const [newLinkedName, setNewLinkedName] = useState("")
   const [newLinkedKind, setNewLinkedKind] = useState<"person" | "animal" | "place">("person")
   const [existingTargetId, setExistingTargetId] = useState<string | null>(null)

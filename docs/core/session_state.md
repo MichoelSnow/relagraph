@@ -13,57 +13,53 @@ Do NOT add sections. Do NOT write long prose.
 
 ## Current Objective
 (1–2 sentences max)
-- Stabilize `family_tree` layout readability and correctness (generation constraints, dependent placement, routing, and fallback safety).
-- Keep graph API behavior stable while preventing virtual-family expand crashes.
+- Keep `family_tree` layout behavior stable while enforcing strict stage ownership in the layout pipeline.
+- Verify visual correctness (partner alignment, anchor-centered dependents, stable sibling ordering) on real graph data.
 
 ---
 
 ## Completed This Session
 (max 5 bullets)
-- Introduced layout abstraction in `lib/graph/layout.ts` (`LayoutInput/LayoutOutput/LayoutEngine`, registry, `graph` + `family_tree`) and wired `GraphCanvas`/`GraphExplorer`/`GraphWorkspace` to consume it.
-- Implemented generation-based `family_tree` layout with sibling ordering (birth-date when available, stable fallback), spacing config, and live spacing controls in workspace UI.
-- Added orthogonal routing metadata/styles for family-tree edges; enforced romantic same-level grouping and dependent placement for children + pets/animals.
-- Reworked family subtree placement to bottom-up subtree widths + top-down span assignment, eliminating sibling subtree interleaving and reducing crossings.
-- Added fallback resolver (`resolveLayoutWithFallback`) for `family_tree` edge cases (`too_many_parents`, `unsupported_structure`, `excessive_crossing`, `layout_error`) and fixed virtual `family:*` expand requests in API handler to return safe empty deltas instead of UUID DB errors.
+- Completed pipeline stage split for `family_tree`: `FilterGraph -> BuildStructure -> ApplyConstraints -> AssignOrder -> ComputeLayout -> RouteEdges`.
+- Made `AssignOrder` the single ordering authority; removed ordering logic from `ApplyConstraints` and `ComputeLayout`.
+- Removed monolithic legacy layout execution and deleted `lib/graph/layout/index.ts`; runtime now uses pipeline-only layout paths.
+- Added layout-only shared modules (`lib/graph/layout/types.ts`, `lib/graph/layout/deriveFamilyOrder.ts`) and updated graph UI/test imports to use them.
+- Fixed correctness issues by stage: romantic same-level enforcement (`ApplyConstraints`), partner/dependent ordering stability (`AssignOrder`), anchor-based dependent centering + post-adjacency re-centering (`ComputeLayout`); typecheck + layout unit tests pass.
 
 ---
 
 ## In Progress / Open
 (max 5 bullets)
-- Manual UX verification in real graph data: confirm romantic edge readability and dependent subtree centering in dense families.
-- Decide whether to surface fallback reason (`ResolvedLayout.fallbackReason`) in debug UI/telemetry for troubleshooting.
+- Manual validation on production-like dense family graphs is still pending.
+- Need focused checks for mixed cases: romantic + sibling + pet owners with incremental updates.
 
 ---
 
 ## Next Concrete Steps
 (ordered, actionable, max 5)
-1. Run manual exploratory checks on family-heavy graphs (single dependent, multi-parent, romantic + pet mixed cases).
-2. If visual regressions appear, tune subtree gap/centering constants in `family_tree` only.
-3. Optional: add lightweight logging/telemetry hook when layout resolver falls back from `family_tree` to `graph`.
-4. Commit current branch changes after manual verification.
+1. Run manual family-view verification on dense graphs (single dependent, multi-dependent, romantic cross-family, pet ownership).
+2. Confirm no visual regressions during add/remove interactions with auto layout enabled.
+3. If issues appear, patch only the owning stage (`ApplyConstraints` for levels, `AssignOrder` for order, `ComputeLayout` for positions).
+4. Add/adjust targeted unit tests for any discovered edge case before further refactors.
 
 ---
 
 ## Working Tree State
 
 Branch:
-- `feature/ai-spec-integration`
+- `feature/layout-modes`
 
 Modified Files:
-- `package.json`
-- `tsconfig.app.json` (new)
-- `tsconfig.json`
-- `tsconfig.vitest.json`
-- `docs/core/session_state.md`
+- None
 
 Uncommitted Changes:
-- Present in the files listed above; no commit created in this session.
+- None
 
 Notes:
 (max 3 bullets, only critical info)
-- Layout work is the primary change set this session; config split for app/test TypeScript projects was a minor IDE ergonomics follow-up.
-- `graph/expand` now safely handles virtual `family:*` IDs at request boundary (no UUID query path).
-- Typecheck now has explicit app/tests split scripts: `typecheck`, `typecheck:tests`, `typecheck:all`.
+- `lib/graph/layout/index.ts` has been removed; no runtime layout fallback path remains.
+- `family_tree` pipeline stages are now the single source of truth for filtering, structure, constraints, order, positions, and routing.
+- Latest checks completed: `pnpm typecheck` and `vitest` layout-focused unit suites are passing.
 
 ---
 

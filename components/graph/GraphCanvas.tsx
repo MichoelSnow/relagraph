@@ -1,7 +1,7 @@
 "use client"
 
 import cytoscape, { type ElementDefinition } from "cytoscape"
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { deriveFamilyOrderFromLayout } from "@/lib/graph/layout/deriveFamilyOrder"
 import type {
@@ -239,10 +239,11 @@ export default function GraphCanvas({
   const previousLayoutModeRef = useRef<"auto" | "manual">(layoutMode)
   const previousLayoutEngineModeRef = useRef<LayoutEngineMode>(layoutEngineMode)
   const previousLayoutConfigKeyRef = useRef(`${layoutConfig.horizontalSpacing}|${layoutConfig.verticalSpacing}`)
-  const previousLayoutConfigRef = useRef<LayoutConfig>(layoutConfig)
   const previousPositionsRef = useRef<PreviousPositions>({})
   const previousOrderRef = useRef<PreviousOrder>({})
   const previousInputRef = useRef<LayoutInput>({ entities: [], edges: [] })
+  const [previousPositionsSnapshot, setPreviousPositionsSnapshot] = useState<PreviousPositions>({})
+  const [previousOrderSnapshot, setPreviousOrderSnapshot] = useState<PreviousOrder>({})
 
   const onNodeClickRef = useRef(onNodeClick)
   const onEdgeClickRef = useRef(onEdgeClick)
@@ -259,11 +260,19 @@ export default function GraphCanvas({
       entities,
       edges,
       focusNodeId: selectedEntityId ?? undefined,
-      previousPositions: previousPositionsRef.current,
-      previousOrder: previousOrderRef.current,
+      previousPositions: previousPositionsSnapshot,
+      previousOrder: previousOrderSnapshot,
       layoutConfig: layoutConfigForEngine
     })
-  }, [layoutEngineMode, entities, edges, selectedEntityId, layoutConfigForEngine])
+  }, [
+    layoutEngineMode,
+    entities,
+    edges,
+    selectedEntityId,
+    layoutConfigForEngine,
+    previousPositionsSnapshot,
+    previousOrderSnapshot
+  ])
   const layoutEdgeById = useMemo(
     () => new Map(layoutOutput.edges.map((edge) => [edge.id, edge])),
     [layoutOutput.edges]
@@ -384,6 +393,8 @@ export default function GraphCanvas({
       previousTopologyKeyRef.current = ""
       previousPositionsRef.current = {}
       previousOrderRef.current = {}
+      setPreviousPositionsSnapshot({})
+      setPreviousOrderSnapshot({})
       previousInputRef.current = { entities: [], edges: [] }
     }
   }, [])
@@ -516,7 +527,7 @@ export default function GraphCanvas({
     const layoutConfigChanged = previousLayoutConfigKeyRef.current !== layoutConfigKey
 
     const previousInput = previousInputRef.current
-    const { changeType, addedNodeIds, removedNodeIds, addedEdgeIds, removedEdgeIds } = classifyLayoutChange({
+    const { changeType, addedNodeIds } = classifyLayoutChange({
       previousEntities: previousInput.entities,
       previousEdges: previousInput.edges,
       entities,
@@ -566,6 +577,8 @@ export default function GraphCanvas({
         }
         previousPositionsRef.current = nextPositions
         previousOrderRef.current = nextOrder
+        setPreviousPositionsSnapshot(nextPositions)
+        setPreviousOrderSnapshot(nextOrder)
       }
     } else {
       cy.autoungrabify(false)
@@ -580,7 +593,6 @@ export default function GraphCanvas({
     previousLayoutModeRef.current = layoutMode
     previousLayoutEngineModeRef.current = layoutEngineMode
     previousLayoutConfigKeyRef.current = layoutConfigKey
-    previousLayoutConfigRef.current = layoutConfig
     previousInputRef.current = { entities, edges }
   }, [elements, topologyKey, layoutOutput, layoutMode, layoutEngineMode, layoutConfig, layoutConfigForEngine, entities, edges])
 
